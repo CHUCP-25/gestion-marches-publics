@@ -460,7 +460,7 @@
                 <input type="text" id="searchInput" placeholder="Rechercher par N° DAO, N° marché, Société...">
                 <button class="btn" id="searchBtn">Rechercher</button>
             </div>
-            <button class="btn btn-save" id="saveBtn">💾 Sauvegarder</button>
+            <button class="btn btn-save" id="saveBtn">💾 Sauvegarder tout</button>
         </div>
         
         <div class="pagination-controls">
@@ -644,7 +644,6 @@
             let filteredData = [];
             let exercices = new Set();
             let isConnected = false;
-            let autoSaveTimeout = null;
             
             // Initialiser l'application
             initializeApp();
@@ -652,7 +651,7 @@
             // Événements
             addRowBtn.addEventListener('click', addNewRow);
             
-            saveBtn.addEventListener('click', saveToFirebase);
+            saveBtn.addEventListener('click', saveAllToFirebase);
             
             searchBtn.addEventListener('click', performSearch);
             
@@ -851,7 +850,7 @@
                 });
             }
             
-            function saveToFirebase() {
+            function saveAllToFirebase() {
                 if (!isConnected) {
                     showError('Impossible de sauvegarder: connexion perdue');
                     return;
@@ -892,7 +891,7 @@
                 })
                 .then(() => {
                     loadingMessage.style.display = 'none';
-                    successMessage.textContent = 'Données sauvegardées avec succès!';
+                    successMessage.textContent = 'Toutes les données sauvegardées avec succès!';
                     successModal.style.display = 'flex';
                 })
                 .catch((error) => {
@@ -902,16 +901,48 @@
                 });
             }
             
-            function scheduleAutoSave() {
-                if (autoSaveTimeout) {
-                    clearTimeout(autoSaveTimeout);
+            function saveRowToFirebase(row) {
+                if (!isConnected) {
+                    showError('Impossible de sauvegarder: connexion perdue');
+                    return;
                 }
                 
-                autoSaveTimeout = setTimeout(() => {
-                    if (isConnected) {
-                        saveToFirebase();
+                updateAllData();
+                const rowIndex = Array.from(tableBody.querySelectorAll('tr')).indexOf(row);
+                
+                if (rowIndex >= 0 && rowIndex < allData.length) {
+                    const rowData = allData[rowIndex];
+                    
+                    // Ignorer les lignes complètement vides
+                    const hasData = Object.values(rowData).some(value => value !== '');
+                    if (!hasData) {
+                        showError('Impossible de sauvegarder une ligne vide');
+                        return;
                     }
-                }, 5000);
+                    
+                    loadingMessage.style.display = 'block';
+                    loadingMessage.textContent = '⏳ Sauvegarde en cours...';
+                    
+                    const docRef = db.collection('marches').doc();
+                    const dataWithTimestamp = {
+                        ...rowData,
+                        id: docRef.id,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    };
+                    
+                    docRef.set(dataWithTimestamp)
+                    .then(() => {
+                        loadingMessage.style.display = 'none';
+                        successMessage.textContent = 'Ligne sauvegardée avec succès!';
+                        successModal.style.display = 'flex';
+                    })
+                    .catch((error) => {
+                        loadingMessage.style.display = 'none';
+                        console.error('Erreur lors de la sauvegarde:', error);
+                        showError('Erreur lors de la sauvegarde: ' + error.message);
+                    });
+                }
             }
             
             function addRowFromFirebaseData(data) {
@@ -1035,7 +1066,6 @@
                 updateAllData();
                 updateExercices();
                 updatePagination();
-                scheduleAutoSave();
             }
             
             function setupRowEvents(row) {
@@ -1064,7 +1094,6 @@
                     }
                     
                     updateAllData();
-                    scheduleAutoSave();
                 });
                 
                 // Gestion manuelle du visa
@@ -1080,10 +1109,9 @@
                         visaDateInput.disabled = false;
                     }
                     updateAllData();
-                    scheduleAutoSave();
                 });
                 
-                // Bouton Valider
+                // Bouton Valider - Sauvegarde MANUELLE
                 const validateBtn = row.querySelector('.btn-validate');
                 validateBtn.addEventListener('click', function() {
                     const inputs = row.querySelectorAll('input, select, textarea');
@@ -1116,10 +1144,8 @@
                             validateBtn.textContent = 'Valider';
                         }, 2000);
                         
-                        // Sauvegarder automatiquement
-                        if (isConnected) {
-                            saveToFirebase();
-                        }
+                        // Sauvegarder MANUELLEMENT la ligne
+                        saveRowToFirebase(row);
                     } else {
                         alert('Veuillez corriger les erreurs:\n' + message);
                     }
@@ -1130,12 +1156,10 @@
                     input.addEventListener('change', function() {
                         updateAllData();
                         updateExercices();
-                        scheduleAutoSave();
                     });
                     input.addEventListener('input', function() {
                         updateAllData();
                         updateExercices();
-                        scheduleAutoSave();
                     });
                 });
                 
@@ -1151,7 +1175,6 @@
                         tableBody.removeChild(row);
                         updateExercices();
                         updatePagination();
-                        scheduleAutoSave();
                     }
                 });
             }
@@ -1188,7 +1211,6 @@
                     
                     updateAllData();
                     updateExercices();
-                    scheduleAutoSave();
                 }
             }
             
@@ -1301,7 +1323,9 @@
                         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                         const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
                         
+                        // Vider le tableau avant l'importation
                         tableBody.innerHTML = '';
+                        allData = [];
                         
                         let importedRows = 0;
                         for (let i = 1; i < jsonData.length; i++) {
@@ -1333,7 +1357,9 @@
                         }
                         
                         // Ajouter une ligne vierge après l'importation
-                        addNewRow();
+                        if (importedRows === 0) {
+                            addNewRow();
+                        }
                         
                         loadingMessage.style.display = 'none';
                         importModal.style.display = 'none';
@@ -1344,8 +1370,9 @@
                         updateExercices();
                         updatePagination();
                         
-                        if (isConnected) {
-                            saveToFirebase();
+                        // Sauvegarder automatiquement après l'importation
+                        if (isConnected && importedRows > 0) {
+                            saveAllToFirebase();
                         }
                         
                     } catch (error) {

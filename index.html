@@ -23,10 +23,11 @@
             color: #333;
             line-height: 1.6;
             padding: 20px;
+            overflow-x: hidden;
         }
 
         .container {
-            max-width: 1400px;
+            max-width: 100%;
             margin: 0 auto;
             background-color: white;
             border-radius: 8px;
@@ -134,6 +135,20 @@
             background-color: #8e44ad;
         }
 
+        .btn-validate {
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .btn-validate:hover {
+            background-color: #27ae60;
+        }
+
         .search-box {
             display: flex;
             align-items: center;
@@ -201,19 +216,42 @@
         .table-container {
             overflow-x: auto;
             max-height: calc(100vh - 300px);
+            position: relative;
+        }
+
+        .horizontal-scrollbar {
+            height: 15px;
+            background: #f0f0f0;
+            border-radius: 0 0 8px 8px;
+            position: relative;
+            margin-top: 5px;
+        }
+
+        .scroll-thumb {
+            height: 100%;
+            background: #3498db;
+            border-radius: 8px;
+            position: absolute;
+            cursor: grab;
+            min-width: 30px;
+        }
+
+        .scroll-thumb:active {
+            cursor: grabbing;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 1400px;
+            min-width: 1200px;
         }
 
         th, td {
             border: 1px solid #ddd;
             padding: 8px 10px;
-            text-align: left;
+            text-align: center;
             font-size: 12px;
+            min-width: 100px;
         }
 
         th {
@@ -232,7 +270,7 @@
             background-color: #f1f1f1;
         }
 
-        input, select {
+        input, select, textarea {
             width: 100%;
             padding: 5px;
             border: 1px solid #ddd;
@@ -240,7 +278,7 @@
             font-size: 12px;
         }
 
-        input:focus, select:focus {
+        input:focus, select:focus, textarea:focus {
             outline: none;
             border-color: #3498db;
             box-shadow: 0 0 3px rgba(52, 152, 219, 0.5);
@@ -251,15 +289,24 @@
         }
 
         .objet-cell {
-            width: 5cm;
-            max-width: 5cm;
+            width: 400px;
+            min-width: 400px;
+            max-width: 400px;
             word-wrap: break-word;
             white-space: normal;
+        }
+
+        .objet-input {
+            width: 100%;
+            height: 80px;
+            resize: vertical;
         }
 
         .actions {
             display: flex;
             gap: 5px;
+            flex-wrap: wrap;
+            justify-content: center;
         }
 
         .btn-edit, .btn-delete {
@@ -394,6 +441,10 @@
             text-align: center;
             padding: 10px;
         }
+
+        .auto-visa {
+            background-color: #e8f5e8;
+        }
     </style>
 </head>
 <body>
@@ -434,7 +485,7 @@
             </div>
         </div>
         
-        <div class="table-container">
+        <div class="table-container" id="tableContainer">
             <table id="marchesTable">
                 <thead>
                     <tr>
@@ -443,7 +494,7 @@
                         <th>N° de marché</th>
                         <th class="objet-cell">Objet</th>
                         <th>Date ouverture des plis</th>
-                        <th>Date d'achèvement des travaux de la commission</th>
+                        <th>Date d'achèvement des travaux</th>
                         <th>SOCIETE</th>
                         <th>TYPE DE DEPENSE</th>
                         <th>Montant Offre retenue</th>
@@ -452,11 +503,8 @@
                         <th>N° DE VISA</th>
                         <th>DATE VISA</th>
                         <th>CAUTIONNEMENT PROVISOIRE</th>
-                        <th>Statut (Libérée, non libérée)</th>
-                        <th>Date de main levée-CP</th>
-                        <th>Cautionnement définitif</th>
-                        <th>Statut (Libérée, non libérée)</th>
-                        <th>Date de main levée-CD</th>
+                        <th>Statut CP</th>
+                        <th>Date main levée-CP</th>
                         <th>OBSERVATION</th>
                         <th>Actions</th>
                     </tr>
@@ -467,14 +515,18 @@
             </table>
         </div>
         
+        <div class="horizontal-scrollbar" id="horizontalScrollbar">
+            <div class="scroll-thumb" id="scrollThumb"></div>
+        </div>
+        
         <div class="loading" id="loadingMessage">
             ⏳ Veuillez patienter, opération en cours...
         </div>
         
         <div class="table-footer">
-            <button class="btn btn-add" id="addRowBtn">Ajouter une ligne</button>
+            <button class="btn btn-add" id="addRowBtn">+ Ajouter une ligne</button>
             <div class="export-options">
-                <button class="btn btn-import" id="importBtn">Importer</button>
+                <button class="btn btn-import" id="importBtn">📁 Importer</button>
                 <button class="btn btn-export-excel" id="exportExcelBtn">📊 Exporter Excel</button>
                 <button class="btn btn-export-pdf" id="exportPdfBtn">📄 Exporter PDF</button>
             </div>
@@ -572,6 +624,9 @@
             const pageTitle = document.getElementById('pageTitle');
             const exerciceSubtitle = document.getElementById('exerciceSubtitle');
             const connectionStatus = document.getElementById('connectionStatus');
+            const tableContainer = document.getElementById('tableContainer');
+            const horizontalScrollbar = document.getElementById('horizontalScrollbar');
+            const scrollThumb = document.getElementById('scrollThumb');
             
             // Contrôles de pagination
             const firstPageBtn = document.getElementById('firstPageBtn');
@@ -591,28 +646,17 @@
             let isConnected = false;
             let autoSaveTimeout = null;
             
-            // Initialiser Firebase et charger les données
-            initializeFirebase();
+            // Initialiser l'application
+            initializeApp();
             
             // Événements
-            addRowBtn.addEventListener('click', function() {
-                addNewRow();
-                updateExercices();
-                updatePagination();
-                scheduleAutoSave();
-            });
+            addRowBtn.addEventListener('click', addNewRow);
             
-            saveBtn.addEventListener('click', function() {
-                saveToFirebase();
-            });
+            saveBtn.addEventListener('click', saveToFirebase);
             
-            searchBtn.addEventListener('click', function() {
-                performSearch();
-            });
+            searchBtn.addEventListener('click', performSearch);
             
-            searchInput.addEventListener('input', function() {
-                performSearch();
-            });
+            searchInput.addEventListener('input', performSearch);
             
             searchInput.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
@@ -654,13 +698,9 @@
                 importFromExcel(fileInput.files[0]);
             });
             
-            exportExcelBtn.addEventListener('click', function() {
-                exportToExcel();
-            });
+            exportExcelBtn.addEventListener('click', exportToExcel);
             
-            exportPdfBtn.addEventListener('click', function() {
-                exportToPdf();
-            });
+            exportPdfBtn.addEventListener('click', exportToPdf);
             
             // Événements de pagination
             firstPageBtn.addEventListener('click', function() {
@@ -695,6 +735,76 @@
                 updatePagination();
             });
             
+            // Configuration de la barre de défilement horizontale
+            function setupHorizontalScrollbar() {
+                const table = document.getElementById('marchesTable');
+                const container = tableContainer;
+                
+                function updateScrollbar() {
+                    const scrollWidth = container.scrollWidth;
+                    const clientWidth = container.clientWidth;
+                    const scrollLeft = container.scrollLeft;
+                    
+                    if (scrollWidth > clientWidth) {
+                        const thumbWidth = (clientWidth / scrollWidth) * 100;
+                        const thumbPosition = (scrollLeft / (scrollWidth - clientWidth)) * (100 - thumbWidth);
+                        
+                        scrollThumb.style.width = `${thumbWidth}%`;
+                        scrollThumb.style.left = `${thumbPosition}%`;
+                        horizontalScrollbar.style.display = 'block';
+                    } else {
+                        horizontalScrollbar.style.display = 'none';
+                    }
+                }
+                
+                // Faire glisser la barre de défilement
+                let isDragging = false;
+                let startX;
+                let startScrollLeft;
+                
+                scrollThumb.addEventListener('mousedown', function(e) {
+                    isDragging = true;
+                    startX = e.clientX;
+                    startScrollLeft = container.scrollLeft;
+                    scrollThumb.style.cursor = 'grabbing';
+                    e.preventDefault();
+                });
+                
+                document.addEventListener('mousemove', function(e) {
+                    if (!isDragging) return;
+                    
+                    const deltaX = e.clientX - startX;
+                    const scrollWidth = container.scrollWidth - container.clientWidth;
+                    const thumbWidth = horizontalScrollbar.offsetWidth;
+                    const thumbMoveRatio = scrollWidth / (thumbWidth - scrollThumb.offsetWidth);
+                    
+                    container.scrollLeft = startScrollLeft + deltaX * thumbMoveRatio;
+                    updateScrollbar();
+                });
+                
+                document.addEventListener('mouseup', function() {
+                    isDragging = false;
+                    scrollThumb.style.cursor = 'grab';
+                });
+                
+                container.addEventListener('scroll', updateScrollbar);
+                window.addEventListener('resize', updateScrollbar);
+                
+                // Mettre à jour initialement
+                updateScrollbar();
+            }
+            
+            function initializeApp() {
+                // Créer une première ligne vierge immédiatement
+                addNewRow();
+                
+                // Initialiser Firebase
+                initializeFirebase();
+                
+                // Configurer la barre de défilement
+                setupHorizontalScrollbar();
+            }
+            
             function initializeFirebase() {
                 // Vérifier la connexion
                 db.enableNetwork()
@@ -711,19 +821,6 @@
                     connectionStatus.className = 'connection-status disconnected';
                     showError('Mode hors ligne activé. Les données seront synchronisées lors de la reconnexion.');
                 });
-                
-                // Écouter les changements de connexion
-                firebase.firestore().enablePersistence()
-                .catch((err) => {
-                    console.error('Erreur de persistence:', err);
-                });
-                
-                // Surveiller l'état de connexion
-                firebase.firestore().onSnapshotsInSync(() => {
-                    isConnected = true;
-                    connectionStatus.textContent = 'Connecté';
-                    connectionStatus.className = 'connection-status connected';
-                });
             }
             
             function loadFromFirebase() {
@@ -732,42 +829,25 @@
                 
                 db.collection('marches').orderBy('createdAt', 'desc').get()
                 .then((querySnapshot) => {
-                    tableBody.innerHTML = '';
-                    allData = [];
-                    
-                    querySnapshot.forEach((doc) => {
-                        const data = doc.data();
-                        addRowFromFirebaseData(data);
-                    });
+                    // Ne pas vider le tableau s'il y a déjà une ligne vierge
+                    if (querySnapshot.size > 0) {
+                        tableBody.innerHTML = '';
+                        allData = [];
+                        
+                        querySnapshot.forEach((doc) => {
+                            const data = doc.data();
+                            addRowFromFirebaseData(data);
+                        });
+                    }
                     
                     loadingMessage.style.display = 'none';
                     updateExercices();
                     updatePagination();
-                    
-                    // Écouter les changements en temps réel
-                    setupRealtimeListener();
                 })
                 .catch((error) => {
                     loadingMessage.style.display = 'none';
                     console.error('Erreur lors du chargement:', error);
                     showError('Erreur lors du chargement des données: ' + error.message);
-                });
-            }
-            
-            function setupRealtimeListener() {
-                db.collection('marches')
-                .orderBy('createdAt', 'desc')
-                .onSnapshot((querySnapshot) => {
-                    if (!querySnapshot.metadata.hasPendingWrites) {
-                        // Ignorer les écritures locales pour éviter les boucles
-                        const changes = querySnapshot.docChanges();
-                        changes.forEach((change) => {
-                            if (change.type === 'added' || change.type === 'modified') {
-                                // Mettre à jour l'interface si nécessaire
-                                console.log('Changement détecté:', change.type);
-                            }
-                        });
-                    }
                 });
             }
             
@@ -794,14 +874,18 @@
                     
                     // Ajouter tous les documents actuels
                     allData.forEach((rowData, index) => {
-                        const docRef = marchesCollection.doc();
-                        const dataWithTimestamp = {
-                            ...rowData,
-                            id: docRef.id,
-                            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                        };
-                        batch.set(docRef, dataWithTimestamp);
+                        // Ignorer les lignes complètement vides
+                        const hasData = Object.values(rowData).some(value => value !== '');
+                        if (hasData) {
+                            const docRef = marchesCollection.doc();
+                            const dataWithTimestamp = {
+                                ...rowData,
+                                id: docRef.id,
+                                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                            };
+                            batch.set(docRef, dataWithTimestamp);
+                        }
                     });
                     
                     return batch.commit();
@@ -827,7 +911,7 @@
                     if (isConnected) {
                         saveToFirebase();
                     }
-                }, 5000); // Sauvegarde automatique après 5 secondes d'inactivité
+                }, 5000);
             }
             
             function addRowFromFirebaseData(data) {
@@ -838,9 +922,9 @@
                     <td><input type="text" class="exercice-input" value="${data.EXERCICE || ''}"></td>
                     <td><input type="text" class="dao-input" value="${data['N° DAO'] || ''}"></td>
                     <td><input type="text" class="marche-input" value="${data['N° de marché'] || ''}"></td>
-                    <td class="objet-cell"><textarea class="objet-input" style="width: 100%; height: 60px; resize: vertical;">${data.Objet || ''}</textarea></td>
+                    <td class="objet-cell"><textarea class="objet-input">${data.Objet || ''}</textarea></td>
                     <td><input type="date" class="date-ouverture-input" value="${data['Date ouverture des plis'] || ''}"></td>
-                    <td><input type="date" class="date-achevement-input" value="${data["Date d'achèvement des travaux de la commission"] || ''}"></td>
+                    <td><input type="date" class="date-achevement-input" value="${data["Date d'achèvement des travaux"] || ''}"></td>
                     <td><input type="text" class="societe-input" value="${data.SOCIETE || ''}"></td>
                     <td>
                         <select class="type-depense-select">
@@ -864,22 +948,14 @@
                     <td>
                         <select class="statut-cp-select">
                             <option value="">Sélectionner</option>
-                            <option value="libérée" ${data['Statut (Libérée, non libérée)'] === 'libérée' ? 'selected' : ''}>libérée</option>
-                            <option value="non libérée" ${data['Statut (Libérée, non libérée)'] === 'non libérée' ? 'selected' : ''}>non libérée</option>
+                            <option value="libérée" ${data['Statut CP'] === 'libérée' ? 'selected' : ''}>libérée</option>
+                            <option value="non libérée" ${data['Statut CP'] === 'non libérée' ? 'selected' : ''}>non libérée</option>
                         </select>
                     </td>
-                    <td><input type="date" class="date-main-levee-cp" value="${data['Date de main levée-CP'] || ''}"></td>
-                    <td><input type="text" class="caution-definitive-input" value="${data['Cautionnement définitif'] || ''}"></td>
-                    <td>
-                        <select class="statut-cd-select">
-                            <option value="">Sélectionner</option>
-                            <option value="libérée" ${data['Statut (Libérée, non libérée)_1'] === 'libérée' ? 'selected' : ''}>libérée</option>
-                            <option value="non libérée" ${data['Statut (Libérée, non libérée)_1'] === 'non libérée' ? 'selected' : ''}>non libérée</option>
-                        </select>
-                    </td>
-                    <td><input type="date" class="date-main-levee-cd" value="${data['Date de main levée-CD'] || ''}"></td>
+                    <td><input type="date" class="date-main-levee-cp" value="${data['Date main levée-CP'] || ''}"></td>
                     <td><input type="text" class="observation-input" value="${data.OBSERVATION || ''}"></td>
                     <td class="actions">
+                        <button class="btn-validate">Valider</button>
                         <button class="btn-edit">Modifier</button>
                         <button class="btn-delete">Supprimer</button>
                     </td>
@@ -915,7 +991,7 @@
                     <td><input type="text" class="exercice-input" value=""></td>
                     <td><input type="text" class="dao-input" value=""></td>
                     <td><input type="text" class="marche-input" value=""></td>
-                    <td class="objet-cell"><textarea class="objet-input" style="width: 100%; height: 60px; resize: vertical;"></textarea></td>
+                    <td class="objet-cell"><textarea class="objet-input"></textarea></td>
                     <td><input type="date" class="date-ouverture-input" value=""></td>
                     <td><input type="date" class="date-achevement-input" value=""></td>
                     <td><input type="text" class="societe-input" value=""></td>
@@ -946,17 +1022,9 @@
                         </select>
                     </td>
                     <td><input type="date" class="date-main-levee-cp" value=""></td>
-                    <td><input type="text" class="caution-definitive-input" value=""></td>
-                    <td>
-                        <select class="statut-cd-select">
-                            <option value="">Sélectionner</option>
-                            <option value="libérée">libérée</option>
-                            <option value="non libérée">non libérée</option>
-                        </select>
-                    </td>
-                    <td><input type="date" class="date-main-levee-cd" value=""></td>
                     <td><input type="text" class="observation-input" value=""></td>
                     <td class="actions">
+                        <button class="btn-validate">Valider</button>
                         <button class="btn-edit">Modifier</button>
                         <button class="btn-delete">Supprimer</button>
                     </td>
@@ -965,24 +1033,48 @@
                 tableBody.appendChild(newRow);
                 setupRowEvents(newRow);
                 updateAllData();
+                updateExercices();
+                updatePagination();
+                scheduleAutoSave();
             }
             
             function setupRowEvents(row) {
+                const montantInput = row.querySelector('.montant-input');
                 const visaRequiredSelect = row.querySelector('.visa-required');
                 const visaNumberInput = row.querySelector('.visa-number');
                 const visaDateInput = row.querySelector('.visa-date');
                 
-                if (visaRequiredSelect.value === 'visa non requis') {
-                    visaNumberInput.disabled = true;
-                    visaDateInput.disabled = true;
-                }
+                // Auto-détection du visa requis basé sur le montant
+                montantInput.addEventListener('blur', function() {
+                    formatMontant(this);
+                    const montantValue = parseFloat(this.value.replace(/\s/g, '')) || 0;
+                    
+                    if (montantValue >= 500000) {
+                        visaRequiredSelect.value = 'visa requis';
+                        visaRequiredSelect.classList.add('auto-visa');
+                        visaNumberInput.disabled = false;
+                        visaDateInput.disabled = false;
+                    } else {
+                        visaRequiredSelect.value = 'visa non requis';
+                        visaRequiredSelect.classList.remove('auto-visa');
+                        visaNumberInput.disabled = true;
+                        visaDateInput.disabled = true;
+                        visaNumberInput.value = '';
+                        visaDateInput.value = '';
+                    }
+                    
+                    updateAllData();
+                    scheduleAutoSave();
+                });
                 
+                // Gestion manuelle du visa
                 visaRequiredSelect.addEventListener('change', function() {
                     if (this.value === 'visa non requis') {
                         visaNumberInput.disabled = true;
                         visaDateInput.disabled = true;
                         visaNumberInput.value = '';
                         visaDateInput.value = '';
+                        this.classList.remove('auto-visa');
                     } else {
                         visaNumberInput.disabled = false;
                         visaDateInput.disabled = false;
@@ -991,11 +1083,46 @@
                     scheduleAutoSave();
                 });
                 
-                const montantInput = row.querySelector('.montant-input');
-                montantInput.addEventListener('blur', function() {
-                    formatMontant(this);
-                    updateAllData();
-                    scheduleAutoSave();
+                // Bouton Valider
+                const validateBtn = row.querySelector('.btn-validate');
+                validateBtn.addEventListener('click', function() {
+                    const inputs = row.querySelectorAll('input, select, textarea');
+                    let isValid = true;
+                    let message = '';
+                    
+                    // Validation basique
+                    const exercice = row.querySelector('.exercice-input').value;
+                    const dao = row.querySelector('.dao-input').value;
+                    const montant = row.querySelector('.montant-input').value;
+                    
+                    if (!exercice) {
+                        isValid = false;
+                        message += 'Exercice est requis\n';
+                    }
+                    if (!dao) {
+                        isValid = false;
+                        message += 'N° DAO est requis\n';
+                    }
+                    if (!montant) {
+                        isValid = false;
+                        message += 'Montant est requis\n';
+                    }
+                    
+                    if (isValid) {
+                        validateBtn.style.backgroundColor = '#27ae60';
+                        validateBtn.textContent = '✓ Validé';
+                        setTimeout(() => {
+                            validateBtn.style.backgroundColor = '#2ecc71';
+                            validateBtn.textContent = 'Valider';
+                        }, 2000);
+                        
+                        // Sauvegarder automatiquement
+                        if (isConnected) {
+                            saveToFirebase();
+                        }
+                    } else {
+                        alert('Veuillez corriger les erreurs:\n' + message);
+                    }
                 });
                 
                 const inputs = row.querySelectorAll('input, select, textarea');
@@ -1032,8 +1159,11 @@
             function formatMontant(input) {
                 let value = input.value.replace(/\s/g, '');
                 if (value) {
-                    value = parseInt(value).toLocaleString('fr-FR');
-                    input.value = value;
+                    const numValue = parseInt(value);
+                    if (!isNaN(numValue)) {
+                        value = numValue.toLocaleString('fr-FR');
+                        input.value = value;
+                    }
                 }
             }
             
@@ -1183,7 +1313,7 @@
                                     'N° de marché': rowData[2] || '',
                                     'Objet': rowData[3] || '',
                                     'Date ouverture des plis': formatDateForInput(rowData[4]),
-                                    "Date d'achèvement des travaux de la commission": formatDateForInput(rowData[5]),
+                                    "Date d'achèvement des travaux": formatDateForInput(rowData[5]),
                                     'SOCIETE': rowData[6] || '',
                                     'TYPE DE DEPENSE': rowData[7] || '',
                                     'Montant Offre retenue': formatMontantForInput(rowData[8]),
@@ -1192,12 +1322,9 @@
                                     'N° DE VISA': rowData[11] || '',
                                     'DATE VISA': formatDateForInput(rowData[12]),
                                     'CAUTIONNEMENT PROVISOIRE': rowData[13] || '',
-                                    'Statut (Libérée, non libérée)': rowData[14] || '',
-                                    'Date de main levée-CP': formatDateForInput(rowData[15]),
-                                    'Cautionnement définitif': rowData[16] || '',
-                                    'Statut (Libérée, non libérée)_1': rowData[17] || '',
-                                    'Date de main levée-CD': formatDateForInput(rowData[18]),
-                                    'OBSERVATION': rowData[19] || ''
+                                    'Statut CP': rowData[14] || '',
+                                    'Date main levée-CP': formatDateForInput(rowData[15]),
+                                    'OBSERVATION': rowData[16] || ''
                                 };
                                 
                                 addRowFromFirebaseData(dataObj);
@@ -1205,7 +1332,8 @@
                             }
                         }
                         
-                        sortData();
+                        // Ajouter une ligne vierge après l'importation
+                        addNewRow();
                         
                         loadingMessage.style.display = 'none';
                         importModal.style.display = 'none';
@@ -1216,7 +1344,6 @@
                         updateExercices();
                         updatePagination();
                         
-                        // Sauvegarder automatiquement après import
                         if (isConnected) {
                             saveToFirebase();
                         }
@@ -1271,25 +1398,6 @@
                 }
                 
                 return montantValue;
-            }
-            
-            function sortData() {
-                const rows = Array.from(tableBody.querySelectorAll('tr'));
-                
-                rows.sort((a, b) => {
-                    const exerciceA = a.querySelector('.exercice-input').value;
-                    const exerciceB = b.querySelector('.exercice-input').value;
-                    const daoA = a.querySelector('.dao-input').value;
-                    const daoB = b.querySelector('.dao-input').value;
-                    
-                    if (exerciceA !== exerciceB) {
-                        return exerciceA.localeCompare(exerciceB);
-                    }
-                    
-                    return daoA.localeCompare(daoB);
-                });
-                
-                rows.forEach(row => tableBody.appendChild(row));
             }
             
             function exportToExcel() {

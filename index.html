@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Réservation de Séances d'Appel d'Offres</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <!-- Export PDF et Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <script>
+        // CONFIGURATION FIREBASE
+        const firebaseConfig = {
+            apiKey: "AIzaSyC6WcdZ3WA4Nk5iJcjTkxc0WB8WzHIpBpE",
+            authDomain: "reservations-app-b4691.firebaseapp.com",
+            projectId: "reservations-app-b4691",
+            storageBucket: "reservations-app-b4691.firebasestorage.app",
+            messagingSenderId: "153859745731",
+            appId: "1:153859745731:web:1cfeb3a756e6d1154d7f76"
+        };
+
+        // Initialiser Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: { light: '#4F46E5', DEFAULT: '#4338CA', dark: '#3730A3' },
+                        secondary: { light: '#10B981', DEFAULT: '#059669', dark: '#047857' },
+                        accent: { light: '#F59E0B', DEFAULT: '#D97706', dark: '#B45309' },
+                        gray: { lightest: '#F9FAFB', lighter: '#F3F4F6', light: '#E5E7EB', DEFAULT: '#D1D5DB', dark: '#6B7280', darker: '#4B5563', darkest: '#1F2937' }
+                    },
+                    boxShadow: { 'soft': '0 4px 20px rgba(0, 0, 0, 0.08)', 'hard': '0 4px 20px rgba(0, 0, 0, 0.15)' }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #F9FAFB; }
+        .glass-card { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.18); }
+        .unavailable { background-color: #F3F4F6; color: #9CA3AF; }
+        .holiday { background-color: #FBBF24; color: #78350F; font-weight: 600; }
+        .selected { background-color: #4F46E5; color: white; }
+        .calendar-day { min-height: 100px; transition: all 0.2s; }
+        .calendar-day:hover:not(.unavailable):not(.holiday):not(.border-primary) { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); }
+        .gantt-bar { height: 20px; background: linear-gradient(90deg, #4F46E5, #7C3AED); border-radius: 4px; margin-top: 5px; position: relative; transition: all 0.2s; }
+        .gantt-bar:hover { transform: scaleY(1.1); box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3); }
+        .gantt-label { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: white; font-size: 11px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 16px); }
+        .tooltip { position: absolute; z-index: 100; background: rgba(31, 41, 55, 0.95); color: white; padding: 8px 12px; border-radius: 6px; font-size: 13px; pointer-events: none; display: none; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .btn-primary { background: linear-gradient(135deg, #4F46E5, #7C3AED); color: white; transition: all 0.2s; }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3); }
+        .btn-secondary { background: linear-gradient(135deg, #10B981, #059669); color: white; transition: all 0.2s; }
+        .btn-secondary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); }
+        .input-field { transition: all 0.2s; border: 1px solid #E5E7EB; }
+        .input-field:focus { border-color: #A5B4FC; box-shadow: 0 0 0 3px rgba(199, 210, 254, 0.5); }
+        #month-list { max-height: 250px; overflow-y: auto; }
+        @media (max-width: 768px) {
+            .calendar-day { min-height: 70px; }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50">
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <header class="mb-10 bg-gradient-to-r from-primary to-indigo-700 rounded-xl p-6 text-white shadow-lg">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h1 class="text-3xl font-bold mb-2">Réservation de Séances</h1>
+                    <p class="text-indigo-100">Planifiez vos consultations d'appels d'offres en toute simplicité</p>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <div id="auth-status" class="bg-green-500/20 p-2 rounded-lg">
+                        <i class="fas fa-user text-xl"></i>
+                        <span id="user-email" class="text-sm ml-2">Connecté à Firebase</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Formulaire de réservation -->
+            <div class="lg:col-span-1 bg-white rounded-2xl p-6 shadow-xl glass-card order-2 lg:order-1">
+                <h2 class="text-xl font-semibold mb-6 text-gray-800 flex items-center">
+                    <i class="fas fa-plus-circle text-primary mr-3"></i> Nouvelle Réservation
+                </h2>
+                
+                <div class="grid grid-cols-2 gap-4 mb-6" id="date-selectors-container">
+                    <div>
+                        <label for="year-select" class="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                            <i class="fas fa-calendar-year text-gray-500 mr-2"></i> Année
+                        </label>
+                        <select id="year-select" class="w-full p-3 border border-gray-200 rounded-lg input-field">
+                            <option value="2025">2025</option>
+                            <option value="2026">2026</option>
+                            <option value="2027">2027</option>
+                        </select>
+                    </div>
+                    <div class="relative">
+                         <label for="month-selector-btn" class="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                            <i class="far fa-calendar text-gray-500 mr-2"></i> Mois
+                        </label>
+                        <button id="month-selector-btn" class="w-full p-3 border border-gray-200 rounded-lg input-field text-left flex justify-between items-center">
+                            <span id="month-selector-text">Janvier</span>
+                            <i class="fas fa-chevron-down text-gray-500 transform transition-transform duration-200"></i>
+                        </button>
+                        <div id="month-list" class="hidden absolute z-20 w-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 p-2"></div>
+                    </div>
+                </div>
+                
+                <div class="mb-6 bg-white p-4 rounded-xl shadow-soft">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                            <i class="far fa-calendar text-primary mr-2"></i> Calendrier 
+                            <span id="calendar-title-month-year" class="ml-2 text-base text-gray-600 font-medium"></span>
+                        </h3>
+                        <div class="flex space-x-2">
+                            <button id="prev-month" class="p-2 rounded-full hover:bg-gray-100 text-gray-600 hover:text-primary transition"><i class="fas fa-chevron-left"></i></button>
+                            <button id="next-month" class="p-2 rounded-full hover:bg-gray-100 text-gray-600 hover:text-primary transition"><i class="fas fa-chevron-right"></i></button>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-7 gap-1 mb-3 text-center text-xs font-medium text-gray-500">
+                        <div>Lun</div><div>Mar</div><div>Mer</div><div>Jeu</div><div>Ven</div>
+                        <div class="text-gray-400">Sam</div><div class="text-gray-400">Dim</div>
+                    </div>
+                    <div id="calendar-grid" class="grid grid-cols-7 gap-1"></div>
+                </div>
+                
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2 flex items-center"><i class="far fa-calendar-check text-gray-500 mr-2"></i> Date sélectionnée</label>
+                    <input type="text" id="selected-date" class="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 input-field" readonly>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label for="start-hour" class="block text-sm font-medium text-gray-700 mb-2 flex items-center"><i class="far fa-clock text-gray-500 mr-2"></i> Heure de début</label>
+                        <div class="flex gap-2">
+                            <select id="start-hour" class="w-1/2 p-3 border border-gray-200 rounded-lg input-field"></select>
+                            <select id="start-minute" class="w-1/2 p-3 border border-gray-200 rounded-lg input-field"></select>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="end-hour" class="block text-sm font-medium text-gray-700 mb-2 flex items-center"><i class="fas fa-clock text-gray-500 mr-2"></i> Heure de fin</label>
+                        <div class="flex gap-2">
+                            <select id="end-hour" class="w-1/2 p-3 border border-gray-200 rounded-lg input-field"></select>
+                            <select id="end-minute" class="w-1/2 p-3 border border-gray-200 rounded-lg input-field"></select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-6">
+                    <label for="ao-reference" class="block text-sm font-medium text-gray-700 mb-2 flex items-center"><i class="fas fa-hashtag text-gray-500 mr-2"></i> Référence AO</label>
+                    <input type="text" id="ao-reference" class="w-full p-3 border border-gray-200 rounded-lg input-field" placeholder="Ex: AO-2025-001">
+                </div>
+                
+                <div class="mb-6">
+                    <label for="ao-object" class="block text-sm font-medium text-gray-700 mb-2 flex items-center"><i class="fas fa-align-left text-gray-500 mr-2"></i> Objet de l'appel d'offres</label>
+                    <input type="text" id="ao-object" class="w-full p-3 border border-gray-200 rounded-lg input-field" placeholder="Objet de l'appel d'offres">
+                </div>
+                
+                <div class="mb-4 hidden" id="conflict-alert">
+                    <div class="flex items-start bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-lg">
+                        <i class="fas fa-exclamation-triangle text-red-500 mt-1 mr-3"></i>
+                        <div>
+                            <p id="conflict-message" class="font-medium"></p>
+                            <p class="text-sm mt-1">Veuillez choisir une autre plage horaire.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-between space-x-4">
+                    <button id="show-holidays" class="px-5 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition flex-1 flex items-center justify-center"><i class="fas fa-calendar-day mr-2"></i> Jours fériés</button>
+                    <button id="book-session" class="px-5 py-3 btn-primary rounded-lg flex-1 flex items-center justify-center"><i class="fas fa-calendar-plus mr-2"></i> Réserver</button>
+                </div>
+            </div>
+            
+            <!-- Planning -->
+            <div class="lg:col-span-2 order-1 lg:order-2">
+                <div class="bg-white rounded-2xl p-6 shadow-xl glass-card h-full">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-semibold text-gray-800 flex items-center"><i class="fas fa-chart-bar text-primary mr-3"></i> Planning des Réservations</h2>
+                        <button id="view-gantt" class="px-5 py-2.5 btn-secondary rounded-lg flex items-center"><i class="fas fa-table mr-2"></i> Voir toutes</button>
+                    </div>
+                    <div id="gantt-chart" class="bg-gray-50/50 p-4 rounded-xl"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="tooltip" class="tooltip"></div>
+    
+    <!-- Modals -->
+    <div id="holidays-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-md max-h-[80vh] overflow-y-auto glass-card">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-800 flex items-center"><i class="fas fa-umbrella-beach text-accent mr-2"></i> Jours fériés <span id="holidays-year"></span></h3>
+                <button id="close-holidays-modal" class="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="holidays-list" class="divide-y divide-gray-200"></div>
+        </div>
+    </div>
+    
+    <div id="bookings-table-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-6xl max-h-[80vh] overflow-y-auto glass-card">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-800 flex items-center"><i class="fas fa-list-ol text-primary mr-2"></i> Toutes les réservations</h3>
+                <button id="close-bookings-table-modal" class="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">N°</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Référence AO</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Objet</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Heure début</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Heure fin</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bookings-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+                </table>
+            </div>
+            <div class="mt-4 flex justify-end space-x-3">
+                <button id="export-pdf" class="px-4 py-2.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition flex items-center"><i class="fas fa-file-pdf mr-2"></i>PDF</button>
+                <button id="export-excel" class="px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center"><i class="fas fa-file-excel mr-2"></i>Excel</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // VARIABLES GLOBALES
+        let bookings = [];
+        let holidays = { 
+            '2025': [ 
+                { date: '2025-01-01', name: 'Nouvel an' }, 
+                { date: '2025-01-11', name: 'Manifeste de l\'Indépendance' }, 
+                { date: '2025-01-14', name: 'Nouvel An Amazigh' }, 
+                { date: '2025-03-31', name: 'Aid Al Fitr (Jour 1)' }, 
+                { date: '2025-04-01', name: 'Aid Al Fitr (Jour 2)' }, 
+                { date: '2025-05-01', name: 'Fête du Travail' }, 
+                { date: '2025-06-06', name: 'Aid Al Addha (Jour 1)' }, 
+                { date: '2025-06-07', name: 'Aid Al Addha (Jour 2)' }, 
+                { date: '2025-06-27', name: '1er Moharram' }, 
+                { date: '2025-07-30', name: 'Fête du Trône' }, 
+                { date: '2025-08-14', name: 'Récupération de Oued Eddahab' }, 
+                { date: '2025-08-20', name: 'Révolution du Roi et du Peuple' }, 
+                { date: '2025-08-21', name: 'Fête de la Jeunesse' }, 
+                { date: '2025-09-05', name: 'Aid Al Mawlid' }, 
+                { date: '2025-11-06', name: 'Marche Verte' }, 
+                { date: '2025-11-18', name: 'Fête de l\'Indépendance' } 
+            ] 
+        };
+
+        const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+        let currentDate = new Date();
+        let selectedDate = null;
+        let selectedStartTime = null;
+        let selectedEndTime = null;
+        let currentYear = new Date().getFullYear();
+        let currentMonth = currentDate.getMonth();
+
+        // ÉLÉMENTS DOM
+        const yearSelect = document.getElementById('year-select'),
+              calendarGrid = document.getElementById('calendar-grid'),
+              selectedDateInput = document.getElementById('selected-date'),
+              startHourSelect = document.getElementById('start-hour'),
+              startMinuteSelect = document.getElementById('start-minute'),
+              endHourSelect = document.getElementById('end-hour'),
+              endMinuteSelect = document.getElementById('end-minute'),
+              aoReferenceInput = document.getElementById('ao-reference'),
+              aoObjectInput = document.getElementById('ao-object'),
+              conflictAlert = document.getElementById('conflict-alert'),
+              conflictMessage = document.getElementById('conflict-message'),
+              bookSessionBtn = document.getElementById('book-session'),
+              showHolidaysBtn = document.getElementById('show-holidays'),
+              viewGanttBtn = document.getElementById('view-gantt'),
+              prevMonthBtn = document.getElementById('prev-month'),
+              nextMonthBtn = document.getElementById('next-month'),
+              holidaysModal = document.getElementById('holidays-modal'),
+              closeHolidaysModal = document.getElementById('close-holidays-modal'),
+              holidaysYear = document.getElementById('holidays-year'),
+              holidaysList = document.getElementById('holidays-list'),
+              bookingsTableModal = document.getElementById('bookings-table-modal'),
+              closeBookingsTableModal = document.getElementById('close-bookings-table-modal'),
+              bookingsTableBody = document.getElementById('bookings-table-body'),
+              exportPdfBtn = document.getElementById('export-pdf'),
+              exportExcelBtn = document.getElementById('export-excel'),
+              ganttChart = document.getElementById('gantt-chart'),
+              tooltip = document.getElementById('tooltip'),
+              calendarTitleMonthYear = document.getElementById('calendar-title-month-year'),
+              monthSelectorBtn = document.getElementById('month-selector-btn'),
+              monthSelectorText = document.getElementById('month-selector-text'),
+              monthList = document.getElementById('month-list'),
+              dateSelectorsContainer = document.getElementById('date-selectors-container');
+
+        // FONCTIONS FIREBASE SIMPLIFIÉES
+        function loadBookingsFromFirebase() {
+            console.log('Chargement des données depuis Firebase...');
+            
+            db.collection('bookings').get()
+                .then((snapshot) => {
+                    console.log('✅ Données reçues de Firebase:', snapshot.size, 'réservations');
+                    
+                    bookings = [];
+                    snapshot.forEach((doc) => {
+                        const data = doc.data();
+                        bookings.push({
+                            id: doc.id,
+                            ...data
+                        });
+                    });
+                    
+                    renderCalendar();
+                    renderGanttChart();
+                    showNotification('Données chargées depuis Firebase !', 'success');
+                })
+                .catch((error) => {
+                    console.error('❌ Erreur Firebase:', error);
+                    showNotification('Mode local activé (erreur Firebase)', 'warning');
+                    
+                    // Mode de secours
+                    const localBookings = JSON.parse(localStorage.getItem('tenderBookings')) || [];
+                    bookings = localBookings;
+                    renderCalendar();
+                    renderGanttChart();
+                });
+        }
+
+        function addNewBooking() {
+            if (!selectedDate) {
+                showNotification("Veuillez sélectionner une date.", "error");
+                return;
+            }
+            
+            const startTime = `${startHourSelect.value}:${startMinuteSelect.value}`;
+            const endTime = `${endHourSelect.value}:${endMinuteSelect.value}`;
+            
+            if (timeToMinutes(startTime) >= timeToMinutes(endTime)) {
+                showNotification("L'heure de fin doit être après l'heure de début.", "error");
+                return;
+            }
+            
+            if (!aoReferenceInput.value.trim() || !aoObjectInput.value.trim()) {
+                showNotification("Référence et Objet sont requis.", "error");
+                return;
+            }
+            
+            if (checkForConflicts()) {
+                showNotification("Conflit d'horaire détecté.", "error");
+                return;
+            }
+
+            const bookingData = {
+                date: formatDateForComparison(selectedDate),
+                startTime: startTime,
+                endTime: endTime,
+                reference: aoReferenceInput.value.trim(),
+                object: aoObjectInput.value.trim(),
+                createdAt: new Date().toISOString()
+            };
+
+            // Sauvegarde dans Firebase
+            db.collection('bookings').add(bookingData)
+                .then((docRef) => {
+                    console.log('✅ Réservation sauvegardée dans Firebase, ID:', docRef.id);
+                    
+                    // Ajouter aussi en local pour l'affichage immédiat
+                    bookings.push({
+                        id: docRef.id,
+                        ...bookingData
+                    });
+                    
+                    aoReferenceInput.value = "";
+                    aoObjectInput.value = "";
+                    renderCalendar();
+                    renderGanttChart();
+                    showNotification("Réservation enregistrée dans Firebase !", "success");
+                })
+                .catch((error) => {
+                    console.error('❌ Erreur Firebase:', error);
+                    
+                    // Sauvegarde de secours en local
+                    const localBooking = {
+                        id: Date.now(),
+                        ...bookingData
+                    };
+                    bookings.push(localBooking);
+                    saveBookingsToLocal();
+                    
+                    aoReferenceInput.value = "";
+                    aoObjectInput.value = "";
+                    renderCalendar();
+                    renderGanttChart();
+                    showNotification("Réservation enregistrée (mode local)", "warning");
+                });
+        }
+
+        function updateExistingBooking() {
+            const bookingId = window.editingBookingId;
+            const bookingIndex = bookings.findIndex(booking => booking.id === bookingId);
+            
+            if (bookingIndex === -1) {
+                resetBookingFormState();
+                showNotification("Erreur: Réservation non trouvée.", "error");
+                return;
+            }
+            
+            if (!selectedDate) {
+                showNotification("Veuillez sélectionner une date.", "error");
+                return;
+            }
+            
+            const startTime = `${startHourSelect.value}:${startMinuteSelect.value}`;
+            const endTime = `${endHourSelect.value}:${endMinuteSelect.value}`;
+            
+            if (timeToMinutes(startTime) >= timeToMinutes(endTime)) {
+                showNotification("L'heure de fin doit être après l'heure de début.", "error");
+                return;
+            }
+            
+            if (!aoReferenceInput.value.trim() || !aoObjectInput.value.trim()) {
+                showNotification("Référence et Objet sont requis.", "error");
+                return;
+            }
+            
+            if (checkForConflicts()) {
+                showNotification("Conflit d'horaire détecté.", "error");
+                return;
+            }
+
+            const updatedData = {
+                date: formatDateForComparison(selectedDate),
+                startTime: startTime,
+                endTime: endTime,
+                reference: aoReferenceInput.value.trim(),
+                object: aoObjectInput.value.trim(),
+                updatedAt: new Date().toISOString()
+            };
+
+            // Mise à jour dans Firebase
+            db.collection('bookings').doc(bookingId).update(updatedData)
+                .then(() => {
+                    console.log('✅ Réservation modifiée dans Firebase');
+                    bookings[bookingIndex] = { ...bookings[bookingIndex], ...updatedData };
+                    resetBookingFormState();
+                    renderCalendar();
+                    renderGanttChart();
+                    showNotification("Réservation modifiée dans Firebase !", "success");
+                })
+                .catch((error) => {
+                    console.error('❌ Erreur Firebase:', error);
+                    // Mise à jour locale de secours
+                    bookings[bookingIndex] = { ...bookings[bookingIndex], ...updatedData };
+                    saveBookingsToLocal();
+                    resetBookingFormState();
+                    renderCalendar();
+                    renderGanttChart();
+                    showNotification("Réservation modifiée (mode local)", "warning");
+                });
+        }
+
+        window.deleteBooking = function(bookingId) {
+            if (window.editingBookingId === bookingId) {
+                resetBookingFormState();
+            }
+            
+            if (confirm("Êtes-vous sûr de vouloir supprimer cette réservation ?")) {
+                // Suppression dans Firebase
+                db.collection('bookings').doc(bookingId).delete()
+                    .then(() => {
+                        console.log('✅ Réservation supprimée de Firebase');
+                        bookings = bookings.filter(booking => booking.id !== bookingId);
+                        renderCalendar();
+                        renderGanttChart();
+                        if (!bookingsTableModal.classList.contains("hidden")) {
+                            showBookingsTable();
+                        }
+                        showNotification("Réservation supprimée de Firebase !", "success");
+                    })
+                    .catch((error) => {
+                        console.error('❌ Erreur Firebase:', error);
+                        // Suppression locale de secours
+                        bookings = bookings.filter(booking => booking.id !== bookingId);
+                        saveBookingsToLocal();
+                        renderCalendar();
+                        renderGanttChart();
+                        if (!bookingsTableModal.classList.contains("hidden")) {
+                            showBookingsTable();
+                        }
+                        showNotification("Réservation supprimée (mode local)", "warning");
+                    });
+            }
+        };
+
+        function saveBookingsToLocal() {
+            localStorage.setItem("tenderBookings", JSON.stringify(bookings));
+        }
+
+        // FONCTIONS EXISTANTES (inchangées)
+        function init(){
+            const e=Array.from(yearSelect.options).map(e=>parseInt(e.value));
+            e.includes(currentYear)||(currentYear=2025),yearSelect.value=currentYear,currentDate=new Date(currentYear,currentMonth,1),
+            yearSelect.addEventListener("change",handleYearChange),
+            prevMonthBtn.addEventListener("click",goToPrevMonth),
+            nextMonthBtn.addEventListener("click",goToNextMonth),
+            bookSessionBtn.addEventListener("click",bookSession),
+            showHolidaysBtn.addEventListener("click",showHolidaysModal),
+            viewGanttBtn.addEventListener("click",showBookingsTable),
+            closeHolidaysModal.addEventListener("click",()=>holidaysModal.classList.add("hidden")),
+            closeBookingsTableModal.addEventListener("click",()=>{bookingsTableModal.classList.add("hidden"),resetBookingFormState()}),
+            exportPdfBtn.addEventListener("click",exportToPdf),
+            exportExcelBtn.addEventListener("click",exportToExcel),
+            setupMonthSelector(),initializeTimeSelectors(),updateMonthSelectorDisplay(),
+            
+            // CHARGER LES DONNÉES AU DÉMARRAGE
+            loadBookingsFromFirebase();
+            
+            renderCalendar(),renderGanttChart()
+        }
+
+        function setupMonthSelector(){monthList.innerHTML=monthNames.map((e,t)=>`<div class="p-2 text-sm text-gray-700 rounded-md hover:bg-indigo-50 cursor-pointer" data-month="${t}">${e}</div>`).join(""),monthSelectorBtn.addEventListener("click",()=>{monthList.classList.toggle("hidden"),monthSelectorBtn.querySelector("i").classList.toggle("rotate-180")}),monthList.addEventListener("click",e=>{e.target.dataset.month&&(currentMonth=parseInt(e.target.dataset.month),currentDate=new Date(currentYear,currentMonth,1),updateMonthSelectorDisplay(),renderCalendar(),monthList.classList.add("hidden"),monthSelectorBtn.querySelector("i").classList.remove("rotate-180"))}),document.addEventListener("click",e=>{dateSelectorsContainer.contains(e.target)||(monthList.classList.add("hidden"),monthSelectorBtn.querySelector("i").classList.remove("rotate-180"))})}
+        function updateMonthSelectorDisplay(){monthSelectorText.textContent=monthNames[currentMonth]}
+        function updateCalendarTitle(){calendarTitleMonthYear&&(calendarTitleMonthYear.textContent=`${monthNames[currentMonth]} ${currentYear}`)}
+        function initializeTimeSelectors(){startHourSelect.innerHTML="",startMinuteSelect.innerHTML="",endHourSelect.innerHTML="",endMinuteSelect.innerHTML="";for(let e=8;e<=16;e++){const t=e.toString().padStart(2,"0");startHourSelect.innerHTML+=`<option value="${t}">${t}</option>`,endHourSelect.innerHTML+=`<option value="${t}">${t}</option>`}for(let e=0;e<60;e++){const t=e.toString().padStart(2,"0");startMinuteSelect.innerHTML+=`<option value="${t}">${t}</option>`,endMinuteSelect.innerHTML+=`<option value="${t}">${t}</option>`}startHourSelect.value="08",startMinuteSelect.value="00",endHourSelect.value="09",endMinuteSelect.value="00",updateSelectedTimes(),startHourSelect.addEventListener("change",updateSelectedTimes),startMinuteSelect.addEventListener("change",updateSelectedTimes),endHourSelect.addEventListener("change",updateSelectedTimes),endMinuteSelect.addEventListener("change",updateSelectedTimes)}
+        function updateSelectedTimes(){selectedStartTime=`${startHourSelect.value}:${startMinuteSelect.value}`,selectedEndTime=`${endHourSelect.value}:${endMinuteSelect.value}`,selectedDate&&selectedStartTime&&selectedEndTime&&checkForConflicts()}
+        function handleYearChange(){currentYear=parseInt(yearSelect.value),holidays[currentYear]||(holidays[currentYear]=[]),currentDate=new Date(currentYear,currentMonth,1),renderCalendar()}
+        function renderCalendar(){const e=currentDate.getFullYear(),t=currentDate.getMonth();updateCalendarTitle();const o=new Date(e,t,1),n=new Date(e,t+1,0).getDate();let a=o.getDay();a=0===a?6:a-1,calendarGrid.innerHTML="";for(let e=0;e<a;e++)calendarGrid.appendChild(createCalendarCell(""));const s=holidays[e]||[];for(let o=1;o<=n;o++){const n=(new Date(e,t,o)).getDay(),a=0===n||6===n,l=formatDateForComparison(new Date(e,t,o)),c=s.some(e=>e.date===l),d=createCalendarCell(o,new Date(e,t,o),a,c);calendarGrid.appendChild(d)}if(!selectedDate||selectedDate.getMonth()!==t||selectedDate.getFullYear()!==e){const e=calendarGrid.querySelector(".available-day:not(.holiday):not(.unavailable)");e?e.click():(selectedDateInput.value="Aucun jour disponible ce mois-ci",selectedDate=null)}}
+        function createCalendarCell(e,t=null,o=!1,n=!1){const a=document.createElement("div");if(a.className="border rounded-lg calendar-day p-2 transition",!t)return a.classList.add("bg-gray-50","cursor-default"),a;const s=formatDateForComparison(t);a.dataset.date=s;const l=o||n;if(l)return a.classList.add(n?"holiday":"unavailable","cursor-not-allowed"),a.innerHTML=`\n <div class="text-right text-sm font-medium">${e}</div>\n ${n?'<div class="text-xs text-center mt-1"><i class="fas fa-star"></i></div>':""}\n `,a;const c=selectedDate&&formatDateForComparison(selectedDate)===s,d=getBookingsForDate(s);return a.className+=` available-day ${c?"border-2 border-primary bg-primary/5":"border-gray-200 hover:bg-indigo-50"} cursor-pointer`,a.innerHTML=`\n <div class="text-right text-sm font-medium ${c?"text-primary":"text-gray-700"}">${e}</div>\n <div class="text-xs mt-2 space-y-1 overflow-hidden max-h-12">\n ${d.slice(0,2).map(e=>`<div class="bg-indigo-100 text-indigo-800 text-xs p-1 rounded truncate" title="${e.reference}: ${e.startTime}-${e.endTime}">${e.startTime}-${e.endTime}</div>`).join("")}\n ${d.length>2?'<div class="text-xs text-center text-gray-500">...</div>':""}\n </div>\n `,a.addEventListener("click",()=>{l||(document.querySelectorAll(".available-day").forEach(e=>{e.classList.remove("border-2","border-primary","bg-primary/5"),e.querySelector("div:first-child")&&e.querySelector("div:first-child").classList.remove("text-primary")}),a.classList.add("border-2","border-primary","bg-primary/5"),a.querySelector("div:first-child")&&a.querySelector("div:first-child").classList.add("text-primary"),selectedDate=t,selectedDateInput.value=formatFrenchDate(t),updateSelectedTimes())}),a}
+        function checkForConflicts(){if(!selectedDate||!selectedStartTime||!selectedEndTime)return conflictAlert.classList.add("hidden"),!1;const e=formatDateForComparison(selectedDate);let t=getBookingsForDate(e);window.editingBookingId&&(t=t.filter(e=>e.id!==window.editingBookingId));const o=timeToMinutes(selectedStartTime),n=timeToMinutes(selectedEndTime);if(o>=n)return conflictMessage.textContent="L'heure de fin doit être après l'heure de début.",conflictAlert.classList.remove("hidden"),!0;for(const a of t){const e=timeToMinutes(a.startTime),t=timeToMinutes(a.endTime);if(o<t&&n>e)return conflictMessage.textContent="Une séance est déjà en cours dans cette plage horaire.",conflictAlert.classList.remove("hidden"),!0}return conflictAlert.classList.add("hidden"),!1}
+        function timeToMinutes(e){const[t,o]=e.split(":").map(Number);return 60*t+o}
+        function bookSession(){window.editingBookingId?updateExistingBooking():addNewBooking()}
+        function resetBookingFormState(){window.editingBookingId=null,bookSessionBtn.innerHTML='<i class="fas fa-calendar-plus mr-2"></i> Réserver',conflictAlert.classList.add("hidden")}
+        function showNotification(e,t="info"){const o={success:"bg-green-500",error:"bg-red-500",info:"bg-blue-500",warning:"bg-yellow-500"},n={success:"fa-check-circle",error:"fa-exclamation-circle",info:"fa-info-circle",warning:"fa-exclamation-triangle"},a=document.createElement("div");a.className=`fixed top-4 right-4 text-white px-4 py-3 rounded-lg shadow-lg flex items-center ${o[t]} z-[100] animate-fade-in-up`,a.innerHTML=`<i class="fas ${n[t]} mr-2"></i><span>${e}</span>`,document.body.appendChild(a),setTimeout(()=>{a.classList.add("animate-fade-out"),setTimeout(()=>a.remove(),300)},3e3)}
+        function showHolidaysModal(){const e=yearSelect.value;holidaysYear.textContent=e;const t=holidays[e]||[];holidaysList.innerHTML=t.length>0?t.map(e=>`\n <div class="py-3 px-2 hover:bg-gray-50 rounded-lg transition">\n <div class="font-medium flex items-center"><i class="fas fa-star text-yellow-400 mr-2 text-sm"></i>${e.name}</div>\n <div class="text-sm text-gray-600 mt-1">${formatFrenchDate(new Date(e.date.replace(/-/g,"/")))}</div>\n </div>`).join(""):`<div class="p-4 text-center text-gray-500">Aucun jour férié défini.</div>`,holidaysModal.classList.remove("hidden")}
+        function showBookingsTable(){window.editingBookingId&&resetBookingFormState(),bookings.length===0?bookingsTableBody.innerHTML='<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500"><div class="py-8"><i class="fas fa-calendar-alt text-3xl text-gray-300 mb-3"></i><p>Aucune réservation</p></div></td></tr>':bookingsTableBody.innerHTML=[...bookings].sort((e,t)=>new Date(e.date)-new Date(t.date)||timeToMinutes(e.startTime)-timeToMinutes(t.startTime)).map((e,t)=>`\n <tr class="hover:bg-gray-50 transition">\n <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${t+1}</td>\n <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${e.reference}</td>\n <td class="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title="${e.object}">${e.object}</td>\n <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatFrenchDate(new Date(e.date.replace(/-/g,"/")))}</td>\n <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${e.startTime}</td>\n <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${e.endTime}</td>\n <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">\n <button onclick="editBooking(${e.id})" class="text-indigo-600 hover:text-indigo-900 mr-3" title="Modifier"><i class="fas fa-edit"></i></button>\n <button onclick="deleteBooking(${e.id})" class="text-red-600 hover:text-red-900" title="Supprimer"><i class="fas fa-trash-alt"></i></button>\n </td>\n </tr>`).join(""),bookingsTableModal.classList.remove("hidden")}
+        function renderGanttChart(){if(bookings.length===0)return void(ganttChart.innerHTML='<div class="text-center py-10 text-gray-400"><i class="fas fa-calendar-alt text-4xl mb-3"></i><p class="text-lg">Aucune réservation</p><p class="text-sm">Créez une réservation.</p></div>');const e=[...bookings].sort((e,t)=>new Date(e.date)-new Date(t.date)||timeToMinutes(e.startTime)-timeToMinutes(t.startTime)),t={};e.forEach(e=>{t[e.date]||(t[e.date]=[]),t[e.date].push(e)}),ganttChart.innerHTML=Object.entries(t).map(([e,t])=>{const o=new Date(e.replace(/-/g,"/")),n=formatFrenchDate(o),a=8,s=17,l=s-a;return`\n <div class="mb-8">\n <div class="font-medium mb-3 text-gray-700 flex items-center"><i class="far fa-calendar text-primary mr-2"></i> ${n}</div>\n <div class="relative bg-gray-100 rounded overflow-hidden">\n <div class="absolute top-0 left-0 right-0 h-full flex border-l border-gray-200">${Array.from({length:l},()=>'<div class="flex-1 border-r border-gray-200"></div>').join("")}</div>\n <div class="relative py-2">${t.map(e=>{const t=timeToMinutes(e.startTime),o=timeToMinutes(e.endTime),n=(t-60*a)/ (60*l)*100,c=(o-t)/(60*l)*100;return`<div class="gantt-bar" style="left: ${Math.max(0,n)}%; width: ${Math.min(100-Math.max(0,n),c)}%;" data-reference="${e.reference}" data-object="${e.object}" data-time="${e.startTime}-${e.endTime}"><div class="gantt-label">${e.reference}</div></div>`}).join("")}</div>\n <div class="flex justify-between text-xs text-gray-500 mt-1 px-1 border-t border-gray-200 pt-1">${Array.from({length:l+1},(_,e)=>`<div style="flex-basis: ${100/l}%; text-align: ${0===e?"left":e===l?"right":"center"};">${a+e}h</div>`).join("")}</div>\n </div>\n </div>`}).join(""),document.querySelectorAll(".gantt-bar").forEach(e=>{e.addEventListener("mouseenter",t=>{tooltip.innerHTML=`<div class="font-medium mb-1">${e.dataset.reference}</div><div class="text-xs mb-1">${e.dataset.time}</div><div class="text-xs text-gray-300">${e.dataset.object}</div>`,tooltip.style.display="block"}),e.addEventListener("mousemove",e=>{tooltip.style.left=`${e.pageX+10}px`,tooltip.style.top=`${e.pageY+10}px`}),e.addEventListener("mouseleave",()=>tooltip.style.display="none")})}
+        function goToPrevMonth(){currentDate.setMonth(currentDate.getMonth()-1),currentMonth=currentDate.getMonth(),currentYear=currentDate.getFullYear(),yearSelect.value=currentYear,holidays[currentYear]||(holidays[currentYear]=[]),updateMonthSelectorDisplay(),renderCalendar()}
+        function goToNextMonth(){currentDate.setMonth(currentDate.getMonth()+1),currentMonth=currentDate.getMonth(),currentYear=currentDate.getFullYear(),yearSelect.value=currentYear,holidays[currentYear]||(holidays[currentYear]=[]),updateMonthSelectorDisplay(),renderCalendar()}
+        function formatDateForComparison(e){const t=e.getFullYear(),o=(e.getMonth()+1).toString().padStart(2,"0"),n=e.getDate().toString().padStart(2,"0");return`${t}-${o}-${n}`}
+        function formatFrenchDate(e){return e?e.toLocaleDateString("fr-FR",{weekday:"long",year:"numeric",month:"long",day:"numeric"}):""}
+        function getBookingsForDate(e){return bookings.filter(t=>t.date===e)}
+        window.editBooking=function(e){const t=bookings.find(t=>t.id===e);if(!t)return;window.editingBookingId=e,selectedDate=new Date(t.date.replace(/-/g,"/")),yearSelect.value=selectedDate.getFullYear(),currentYear=selectedDate.getFullYear(),currentMonth=selectedDate.getMonth(),currentDate=new Date(currentYear,currentMonth,1),updateMonthSelectorDisplay(),renderCalendar();const o=calendarGrid.querySelector(`[data-date="${formatDateForComparison(selectedDate)}"]`);o&&o.click();const[n,a]=t.startTime.split(":"),[s,l]=t.endTime.split(":");startHourSelect.value=n,startMinuteSelect.value=a,endHourSelect.value=s,endMinuteSelect.value=l,updateSelectedTimes(),aoReferenceInput.value=t.reference,aoObjectInput.value=t.object,bookSessionBtn.innerHTML='<i class="fas fa-save mr-2"></i> Modifier',bookingsTableModal.classList.add("hidden"),document.querySelector(".lg\\:col-span-1").scrollIntoView({behavior:"smooth"})}
+
+        // FONCTIONS D'EXPORT
+        function exportToPdf() {
+            if (bookings.length === 0) {
+                showNotification('Aucune réservation à exporter.', 'warning');
+                return;
+            }
+            const doc = new window.jspdf.jsPDF();
+            const sortedBookings = [...bookings].sort((a, b) => new Date(a.date) - new Date(b.date) || timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+            const tableColumns = ["N°", "Référence AO", "Objet", "Date", "Heure début", "Heure fin"];
+            const tableRows = sortedBookings.map((booking, index) => {
+                const bookingDate = new Date(booking.date.replace(/-/g, '/'));
+                return [index + 1, booking.reference, booking.object, formatFrenchDate(bookingDate), booking.startTime, booking.endTime];
+            });
+            doc.text("Liste des Réservations de Séances", 14, 15);
+            doc.autoTable({head: [tableColumns], body: tableRows, startY: 20, theme: 'grid', styles: { fontSize: 8 }, headStyles: { fillColor: [67, 56, 202] }});
+            doc.save('reservations_planning.pdf');
+            showNotification('PDF généré avec succès !', 'success');
+        }
+
+        function exportToExcel() {
+            if (bookings.length === 0) {
+                showNotification('Aucune réservation à exporter.', 'warning');
+                return;
+            }
+            const sortedBookings = [...bookings].sort((a, b) => new Date(a.date) - new Date(b.date) || timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+            const dataForExcel = sortedBookings.map((booking, index) => ({
+                'N°': index + 1, 'Référence AO': booking.reference, 'Objet': booking.object,
+                'Date': formatFrenchDate(new Date(booking.date.replace(/-/g, '/'))), 'Heure de début': booking.startTime,
+                'Heure de fin': booking.endTime, 'Date de création': new Date(booking.createdAt).toLocaleString('fr-FR')
+            }));
+            const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
+            const objectMaxLength = Math.max(...dataForExcel.map(item => item.Objet.length), 10);
+            worksheet['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: objectMaxLength }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 20 }];
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Réservations');
+            XLSX.writeFile(workbook, 'reservations_planning.xlsx');
+            showNotification('Fichier Excel généré avec succès !', 'success');
+        }
+
+        // ANIMATIONS
+        const animStyle = document.createElement('style');
+        animStyle.textContent = `@keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } @keyframes fadeOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-10px); } } .animate-fade-in-up { animation: fadeInUp 0.3s ease-out forwards; } .animate-fade-out { animation: fadeOut 0.3s ease-out forwards; }`;
+        document.head.appendChild(animStyle);
+
+        // DÉMARRER L'APPLICATION
+        init();
+    </script>
+</body>
+</html>

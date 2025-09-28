@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Situation des Marchés</title>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
     <style>
         * {
             box-sizing: border-box;
@@ -43,6 +49,25 @@
         .subtitle {
             font-size: 14px;
             opacity: 0.8;
+        }
+
+        .connection-status {
+            display: inline-block;
+            margin-left: 10px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .connected {
+            background-color: #27ae60;
+            color: white;
+        }
+
+        .disconnected {
+            background-color: #e74c3c;
+            color: white;
         }
 
         .controls {
@@ -99,6 +124,14 @@
 
         .btn-import:hover {
             background-color: #d35400;
+        }
+
+        .btn-save {
+            background-color: #9b59b6;
+        }
+
+        .btn-save:hover {
+            background-color: #8e44ad;
         }
 
         .search-box {
@@ -354,6 +387,13 @@
             text-align: center;
             padding: 10px;
         }
+
+        .error-message {
+            color: #e74c3c;
+            font-weight: bold;
+            text-align: center;
+            padding: 10px;
+        }
     </style>
 </head>
 <body>
@@ -361,6 +401,7 @@
         <header>
             <h1 id="pageTitle">SITUATION DES MARCHÉS</h1>
             <div class="subtitle" id="exerciceSubtitle">EXERCICE</div>
+            <div class="connection-status" id="connectionStatus">Chargement...</div>
         </header>
         
         <div class="controls">
@@ -368,6 +409,7 @@
                 <input type="text" id="searchInput" placeholder="Rechercher par N° DAO, N° marché, Société...">
                 <button class="btn" id="searchBtn">Rechercher</button>
             </div>
+            <button class="btn btn-save" id="saveBtn">💾 Sauvegarder</button>
         </div>
         
         <div class="pagination-controls">
@@ -426,7 +468,7 @@
         </div>
         
         <div class="loading" id="loadingMessage">
-            ⏳ Veuillez patienter, opération d'importation en cours...
+            ⏳ Veuillez patienter, opération en cours...
         </div>
         
         <div class="table-footer">
@@ -462,7 +504,7 @@
     <div class="modal" id="successModal">
         <div class="modal-content">
             <div class="modal-header">
-                <div class="modal-title">Importation réussie</div>
+                <div class="modal-title">Opération réussie</div>
             </div>
             <div class="modal-body">
                 <div class="success-message" id="successMessage"></div>
@@ -473,12 +515,42 @@
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Modal d'erreur -->
+    <div class="modal" id="errorModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Erreur</div>
+            </div>
+            <div class="modal-body">
+                <div class="error-message" id="errorMessage"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" id="okErrorBtn">OK</button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        // Configuration Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyCH3-BrjT_M8hNXwTW0sxBKY6E8t0UDxy4",
+            authDomain: "gestion-marches-publics.firebaseapp.com",
+            projectId: "gestion-marches-publics",
+            storageBucket: "gestion-marches-publics.firebasestorage.app",
+            messagingSenderId: "308165477195",
+            appId: "1:308165477195:web:64d1f1c4d0e17158459ece",
+            measurementId: "G-92GRNW2QYZ"
+        };
+
+        // Initialiser Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
         document.addEventListener('DOMContentLoaded', function() {
             // Éléments DOM
             const tableBody = document.getElementById('tableBody');
             const addRowBtn = document.getElementById('addRowBtn');
+            const saveBtn = document.getElementById('saveBtn');
             const searchInput = document.getElementById('searchInput');
             const searchBtn = document.getElementById('searchBtn');
             const importBtn = document.getElementById('importBtn');
@@ -486,16 +558,20 @@
             const exportPdfBtn = document.getElementById('exportPdfBtn');
             const importModal = document.getElementById('importModal');
             const successModal = document.getElementById('successModal');
+            const errorModal = document.getElementById('errorModal');
             const closeImportModal = document.getElementById('closeImportModal');
             const cancelImportBtn = document.getElementById('cancelImportBtn');
             const confirmImportBtn = document.getElementById('confirmImportBtn');
             const okSuccessBtn = document.getElementById('okSuccessBtn');
+            const okErrorBtn = document.getElementById('okErrorBtn');
             const fileInput = document.getElementById('fileInput');
             const importStatus = document.getElementById('importStatus');
             const successMessage = document.getElementById('successMessage');
+            const errorMessage = document.getElementById('errorMessage');
             const loadingMessage = document.getElementById('loadingMessage');
             const pageTitle = document.getElementById('pageTitle');
             const exerciceSubtitle = document.getElementById('exerciceSubtitle');
+            const connectionStatus = document.getElementById('connectionStatus');
             
             // Contrôles de pagination
             const firstPageBtn = document.getElementById('firstPageBtn');
@@ -512,15 +588,22 @@
             let allData = [];
             let filteredData = [];
             let exercices = new Set();
+            let isConnected = false;
+            let autoSaveTimeout = null;
             
-            // Initialiser avec un tableau vierge
-            updatePagination();
+            // Initialiser Firebase et charger les données
+            initializeFirebase();
             
             // Événements
             addRowBtn.addEventListener('click', function() {
                 addNewRow();
                 updateExercices();
                 updatePagination();
+                scheduleAutoSave();
+            });
+            
+            saveBtn.addEventListener('click', function() {
+                saveToFirebase();
             });
             
             searchBtn.addEventListener('click', function() {
@@ -551,6 +634,10 @@
             
             okSuccessBtn.addEventListener('click', function() {
                 successModal.style.display = 'none';
+            });
+            
+            okErrorBtn.addEventListener('click', function() {
+                errorModal.style.display = 'none';
             });
             
             fileInput.addEventListener('change', function() {
@@ -608,14 +695,206 @@
                 updatePagination();
             });
             
+            function initializeFirebase() {
+                // Vérifier la connexion
+                db.enableNetwork()
+                .then(() => {
+                    isConnected = true;
+                    connectionStatus.textContent = 'Connecté';
+                    connectionStatus.className = 'connection-status connected';
+                    loadFromFirebase();
+                })
+                .catch((error) => {
+                    console.error('Erreur de connexion Firebase:', error);
+                    isConnected = false;
+                    connectionStatus.textContent = 'Hors ligne';
+                    connectionStatus.className = 'connection-status disconnected';
+                    showError('Mode hors ligne activé. Les données seront synchronisées lors de la reconnexion.');
+                });
+                
+                // Écouter les changements de connexion
+                firebase.firestore().enablePersistence()
+                .catch((err) => {
+                    console.error('Erreur de persistence:', err);
+                });
+                
+                // Surveiller l'état de connexion
+                firebase.firestore().onSnapshotsInSync(() => {
+                    isConnected = true;
+                    connectionStatus.textContent = 'Connecté';
+                    connectionStatus.className = 'connection-status connected';
+                });
+            }
+            
+            function loadFromFirebase() {
+                loadingMessage.style.display = 'block';
+                loadingMessage.textContent = '⏳ Chargement des données...';
+                
+                db.collection('marches').orderBy('createdAt', 'desc').get()
+                .then((querySnapshot) => {
+                    tableBody.innerHTML = '';
+                    allData = [];
+                    
+                    querySnapshot.forEach((doc) => {
+                        const data = doc.data();
+                        addRowFromFirebaseData(data);
+                    });
+                    
+                    loadingMessage.style.display = 'none';
+                    updateExercices();
+                    updatePagination();
+                    
+                    // Écouter les changements en temps réel
+                    setupRealtimeListener();
+                })
+                .catch((error) => {
+                    loadingMessage.style.display = 'none';
+                    console.error('Erreur lors du chargement:', error);
+                    showError('Erreur lors du chargement des données: ' + error.message);
+                });
+            }
+            
+            function setupRealtimeListener() {
+                db.collection('marches')
+                .orderBy('createdAt', 'desc')
+                .onSnapshot((querySnapshot) => {
+                    if (!querySnapshot.metadata.hasPendingWrites) {
+                        // Ignorer les écritures locales pour éviter les boucles
+                        const changes = querySnapshot.docChanges();
+                        changes.forEach((change) => {
+                            if (change.type === 'added' || change.type === 'modified') {
+                                // Mettre à jour l'interface si nécessaire
+                                console.log('Changement détecté:', change.type);
+                            }
+                        });
+                    }
+                });
+            }
+            
+            function saveToFirebase() {
+                if (!isConnected) {
+                    showError('Impossible de sauvegarder: connexion perdue');
+                    return;
+                }
+                
+                loadingMessage.style.display = 'block';
+                loadingMessage.textContent = '⏳ Sauvegarde en cours...';
+                
+                updateAllData();
+                
+                const batch = db.batch();
+                const marchesCollection = db.collection('marches');
+                
+                // Supprimer tous les documents existants
+                db.collection('marches').get()
+                .then((querySnapshot) => {
+                    querySnapshot.forEach((doc) => {
+                        batch.delete(doc.ref);
+                    });
+                    
+                    // Ajouter tous les documents actuels
+                    allData.forEach((rowData, index) => {
+                        const docRef = marchesCollection.doc();
+                        const dataWithTimestamp = {
+                            ...rowData,
+                            id: docRef.id,
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        };
+                        batch.set(docRef, dataWithTimestamp);
+                    });
+                    
+                    return batch.commit();
+                })
+                .then(() => {
+                    loadingMessage.style.display = 'none';
+                    successMessage.textContent = 'Données sauvegardées avec succès!';
+                    successModal.style.display = 'flex';
+                })
+                .catch((error) => {
+                    loadingMessage.style.display = 'none';
+                    console.error('Erreur lors de la sauvegarde:', error);
+                    showError('Erreur lors de la sauvegarde: ' + error.message);
+                });
+            }
+            
+            function scheduleAutoSave() {
+                if (autoSaveTimeout) {
+                    clearTimeout(autoSaveTimeout);
+                }
+                
+                autoSaveTimeout = setTimeout(() => {
+                    if (isConnected) {
+                        saveToFirebase();
+                    }
+                }, 5000); // Sauvegarde automatique après 5 secondes d'inactivité
+            }
+            
+            function addRowFromFirebaseData(data) {
+                const newRow = document.createElement('tr');
+                newRow.setAttribute('data-id', data.id || '');
+                
+                newRow.innerHTML = `
+                    <td><input type="text" class="exercice-input" value="${data.EXERCICE || ''}"></td>
+                    <td><input type="text" class="dao-input" value="${data['N° DAO'] || ''}"></td>
+                    <td><input type="text" class="marche-input" value="${data['N° de marché'] || ''}"></td>
+                    <td class="objet-cell"><textarea class="objet-input" style="width: 100%; height: 60px; resize: vertical;">${data.Objet || ''}</textarea></td>
+                    <td><input type="date" class="date-ouverture-input" value="${data['Date ouverture des plis'] || ''}"></td>
+                    <td><input type="date" class="date-achevement-input" value="${data["Date d'achèvement des travaux de la commission"] || ''}"></td>
+                    <td><input type="text" class="societe-input" value="${data.SOCIETE || ''}"></td>
+                    <td>
+                        <select class="type-depense-select">
+                            <option value="">Sélectionner</option>
+                            <option value="MDD" ${data['TYPE DE DEPENSE'] === 'MDD' ? 'selected' : ''}>MDD</option>
+                            <option value="INVESTISSEMENT" ${data['TYPE DE DEPENSE'] === 'INVESTISSEMENT' ? 'selected' : ''}>INVESTISSEMENT</option>
+                        </select>
+                    </td>
+                    <td><input type="text" class="montant-input amount-input" value="${data['Montant Offre retenue'] || ''}"></td>
+                    <td><input type="text" class="delai-input" value="${data["Délai d'exécution"] || ''}"></td>
+                    <td>
+                        <select class="visa-required">
+                            <option value="">Sélectionner</option>
+                            <option value="visa requis" ${data['VISA REQUIS'] === 'visa requis' ? 'selected' : ''}>visa requis</option>
+                            <option value="visa non requis" ${data['VISA REQUIS'] === 'visa non requis' ? 'selected' : ''}>visa non requis</option>
+                        </select>
+                    </td>
+                    <td><input type="text" class="visa-number" value="${data['N° DE VISA'] || ''}"></td>
+                    <td><input type="date" class="visa-date" value="${data['DATE VISA'] || ''}"></td>
+                    <td><input type="text" class="caution-provisoire-input" value="${data['CAUTIONNEMENT PROVISOIRE'] || ''}"></td>
+                    <td>
+                        <select class="statut-cp-select">
+                            <option value="">Sélectionner</option>
+                            <option value="libérée" ${data['Statut (Libérée, non libérée)'] === 'libérée' ? 'selected' : ''}>libérée</option>
+                            <option value="non libérée" ${data['Statut (Libérée, non libérée)'] === 'non libérée' ? 'selected' : ''}>non libérée</option>
+                        </select>
+                    </td>
+                    <td><input type="date" class="date-main-levee-cp" value="${data['Date de main levée-CP'] || ''}"></td>
+                    <td><input type="text" class="caution-definitive-input" value="${data['Cautionnement définitif'] || ''}"></td>
+                    <td>
+                        <select class="statut-cd-select">
+                            <option value="">Sélectionner</option>
+                            <option value="libérée" ${data['Statut (Libérée, non libérée)_1'] === 'libérée' ? 'selected' : ''}>libérée</option>
+                            <option value="non libérée" ${data['Statut (Libérée, non libérée)_1'] === 'non libérée' ? 'selected' : ''}>non libérée</option>
+                        </select>
+                    </td>
+                    <td><input type="date" class="date-main-levee-cd" value="${data['Date de main levée-CD'] || ''}"></td>
+                    <td><input type="text" class="observation-input" value="${data.OBSERVATION || ''}"></td>
+                    <td class="actions">
+                        <button class="btn-edit">Modifier</button>
+                        <button class="btn-delete">Supprimer</button>
+                    </td>
+                `;
+                
+                tableBody.appendChild(newRow);
+                setupRowEvents(newRow);
+            }
+            
             function performSearch() {
                 const searchTerm = searchInput.value.toLowerCase().trim();
                 
                 if (searchTerm === '') {
-                    // Si la recherche est vide, afficher toutes les données
                     filteredData = [...allData];
                 } else {
-                    // Recherche dans toutes les colonnes
                     filteredData = allData.filter(row => {
                         return Object.values(row).some(value => 
                             value && value.toString().toLowerCase().includes(searchTerm)
@@ -630,6 +909,7 @@
             
             function addNewRow() {
                 const newRow = document.createElement('tr');
+                newRow.setAttribute('data-id', '');
                 
                 newRow.innerHTML = `
                     <td><input type="text" class="exercice-input" value=""></td>
@@ -688,7 +968,6 @@
             }
             
             function setupRowEvents(row) {
-                // Gérer la sélection du visa
                 const visaRequiredSelect = row.querySelector('.visa-required');
                 const visaNumberInput = row.querySelector('.visa-number');
                 const visaDateInput = row.querySelector('.visa-date');
@@ -709,29 +988,30 @@
                         visaDateInput.disabled = false;
                     }
                     updateAllData();
+                    scheduleAutoSave();
                 });
                 
-                // Formater le montant avec séparateur de milliers
                 const montantInput = row.querySelector('.montant-input');
                 montantInput.addEventListener('blur', function() {
                     formatMontant(this);
                     updateAllData();
+                    scheduleAutoSave();
                 });
                 
-                // Mettre à jour les données quand les champs changent
                 const inputs = row.querySelectorAll('input, select, textarea');
                 inputs.forEach(input => {
                     input.addEventListener('change', function() {
                         updateAllData();
                         updateExercices();
+                        scheduleAutoSave();
                     });
                     input.addEventListener('input', function() {
                         updateAllData();
                         updateExercices();
+                        scheduleAutoSave();
                     });
                 });
                 
-                // Boutons d'action
                 const editBtn = row.querySelector('.btn-edit');
                 const deleteBtn = row.querySelector('.btn-delete');
                 
@@ -744,6 +1024,7 @@
                         tableBody.removeChild(row);
                         updateExercices();
                         updatePagination();
+                        scheduleAutoSave();
                     }
                 });
             }
@@ -761,7 +1042,6 @@
                 const editBtn = row.querySelector('.btn-edit');
                 
                 if (editBtn.textContent === 'Modifier') {
-                    // Activer l'édition
                     inputs.forEach(input => {
                         if (!input.disabled) {
                             input.style.backgroundColor = '#fffacd';
@@ -770,16 +1050,15 @@
                     editBtn.textContent = 'Sauvegarder';
                     editBtn.style.backgroundColor = '#27ae60';
                 } else {
-                    // Désactiver l'édition
                     inputs.forEach(input => {
                         input.style.backgroundColor = '';
                     });
                     editBtn.textContent = 'Modifier';
                     editBtn.style.backgroundColor = '#f39c12';
                     
-                    // Mettre à jour les données
                     updateAllData();
                     updateExercices();
+                    scheduleAutoSave();
                 }
             }
             
@@ -812,7 +1091,6 @@
                     }
                 });
                 
-                // Mettre à jour le titre
                 if (exercices.size === 0) {
                     pageTitle.textContent = 'SITUATION DES MARCHÉS';
                     exerciceSubtitle.textContent = 'EXERCICE';
@@ -836,16 +1114,13 @@
                 const totalRows = filteredData.length;
                 const totalPages = Math.ceil(totalRows / rowsPerPage);
                 
-                // Mettre à jour les informations de pagination
                 paginationInfo.textContent = `Page ${currentPage} sur ${totalPages} (${totalRows} lignes)`;
                 
-                // Activer/désactiver les boutons de navigation
                 firstPageBtn.disabled = currentPage === 1;
                 prevPageBtn.disabled = currentPage === 1;
                 nextPageBtn.disabled = currentPage === totalPages || totalPages === 0;
                 lastPageBtn.disabled = currentPage === totalPages || totalPages === 0;
                 
-                // Mettre à jour les numéros de page
                 pageNumbers.innerHTML = '';
                 const startPage = Math.max(1, currentPage - 2);
                 const endPage = Math.min(totalPages, currentPage + 2);
@@ -883,6 +1158,7 @@
                 if (!file) return;
                 
                 loadingMessage.style.display = 'block';
+                loadingMessage.textContent = '⏳ Importation en cours...';
                 importStatus.textContent = 'Traitement en cours...';
                 
                 const reader = new FileReader();
@@ -892,59 +1168,58 @@
                         const data = new Uint8Array(e.target.result);
                         const workbook = XLSX.read(data, { type: 'array' });
                         
-                        // Supposer que la première feuille contient les données
                         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                         const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
                         
-                        // Vider le tableau actuel
                         tableBody.innerHTML = '';
                         
-                        // Ignorer la première ligne (en-têtes) et traiter les données
                         let importedRows = 0;
                         for (let i = 1; i < jsonData.length; i++) {
                             const rowData = jsonData[i];
                             if (rowData && rowData.length > 0) {
                                 const dataObj = {
-                                    exercice: rowData[0] || '',
-                                    dao: rowData[1] || '',
-                                    marche: rowData[2] || '',
-                                    objet: rowData[3] || '',
-                                    dateOuverture: formatDateForInput(rowData[4]),
-                                    dateAchevement: formatDateForInput(rowData[5]),
-                                    societe: rowData[6] || '',
-                                    typeDepense: rowData[7] || '',
-                                    montant: formatMontantForInput(rowData[8]),
-                                    delai: rowData[9] || '',
-                                    visaRequis: rowData[10] || '',
-                                    visaNumber: rowData[11] || '',
-                                    visaDate: formatDateForInput(rowData[12]),
-                                    cautionProvisoire: rowData[13] || '',
-                                    statutCP: rowData[14] || '',
-                                    dateMainLeveeCP: formatDateForInput(rowData[15]),
-                                    cautionDefinitive: rowData[16] || '',
-                                    statutCD: rowData[17] || '',
-                                    dateMainLeveeCD: formatDateForInput(rowData[18]),
-                                    observation: rowData[19] || ''
+                                    EXERCICE: rowData[0] || '',
+                                    'N° DAO': rowData[1] || '',
+                                    'N° de marché': rowData[2] || '',
+                                    'Objet': rowData[3] || '',
+                                    'Date ouverture des plis': formatDateForInput(rowData[4]),
+                                    "Date d'achèvement des travaux de la commission": formatDateForInput(rowData[5]),
+                                    'SOCIETE': rowData[6] || '',
+                                    'TYPE DE DEPENSE': rowData[7] || '',
+                                    'Montant Offre retenue': formatMontantForInput(rowData[8]),
+                                    "Délai d'exécution": rowData[9] || '',
+                                    'VISA REQUIS': rowData[10] || '',
+                                    'N° DE VISA': rowData[11] || '',
+                                    'DATE VISA': formatDateForInput(rowData[12]),
+                                    'CAUTIONNEMENT PROVISOIRE': rowData[13] || '',
+                                    'Statut (Libérée, non libérée)': rowData[14] || '',
+                                    'Date de main levée-CP': formatDateForInput(rowData[15]),
+                                    'Cautionnement définitif': rowData[16] || '',
+                                    'Statut (Libérée, non libérée)_1': rowData[17] || '',
+                                    'Date de main levée-CD': formatDateForInput(rowData[18]),
+                                    'OBSERVATION': rowData[19] || ''
                                 };
                                 
-                                addRowFromImportedData(dataObj);
+                                addRowFromFirebaseData(dataObj);
                                 importedRows++;
                             }
                         }
                         
-                        // Trier les données par exercice et N° DAO
                         sortData();
                         
                         loadingMessage.style.display = 'none';
                         importModal.style.display = 'none';
                         
-                        // Afficher le message de succès
                         successMessage.textContent = `Importation réussie! ${importedRows} lignes importées.`;
                         successModal.style.display = 'flex';
                         
-                        // Mettre à jour l'affichage
                         updateExercices();
                         updatePagination();
+                        
+                        // Sauvegarder automatiquement après import
+                        if (isConnected) {
+                            saveToFirebase();
+                        }
                         
                     } catch (error) {
                         loadingMessage.style.display = 'none';
@@ -961,78 +1236,17 @@
                 reader.readAsArrayBuffer(file);
             }
             
-            function addRowFromImportedData(data) {
-                const newRow = document.createElement('tr');
-                
-                newRow.innerHTML = `
-                    <td><input type="text" class="exercice-input" value="${data.exercice || ''}"></td>
-                    <td><input type="text" class="dao-input" value="${data.dao || ''}"></td>
-                    <td><input type="text" class="marche-input" value="${data.marche || ''}"></td>
-                    <td class="objet-cell"><textarea class="objet-input" style="width: 100%; height: 60px; resize: vertical;">${data.objet || ''}</textarea></td>
-                    <td><input type="date" class="date-ouverture-input" value="${data.dateOuverture || ''}"></td>
-                    <td><input type="date" class="date-achevement-input" value="${data.dateAchevement || ''}"></td>
-                    <td><input type="text" class="societe-input" value="${data.societe || ''}"></td>
-                    <td>
-                        <select class="type-depense-select">
-                            <option value="">Sélectionner</option>
-                            <option value="MDD" ${data.typeDepense === 'MDD' ? 'selected' : ''}>MDD</option>
-                            <option value="INVESTISSEMENT" ${data.typeDepense === 'INVESTISSEMENT' ? 'selected' : ''}>INVESTISSEMENT</option>
-                        </select>
-                    </td>
-                    <td><input type="text" class="montant-input amount-input" value="${data.montant || ''}"></td>
-                    <td><input type="text" class="delai-input" value="${data.delai || ''}"></td>
-                    <td>
-                        <select class="visa-required">
-                            <option value="">Sélectionner</option>
-                            <option value="visa requis" ${data.visaRequis === 'visa requis' ? 'selected' : ''}>visa requis</option>
-                            <option value="visa non requis" ${data.visaRequis === 'visa non requis' ? 'selected' : ''}>visa non requis</option>
-                        </select>
-                    </td>
-                    <td><input type="text" class="visa-number" value="${data.visaNumber || ''}"></td>
-                    <td><input type="date" class="visa-date" value="${data.visaDate || ''}"></td>
-                    <td><input type="text" class="caution-provisoire-input" value="${data.cautionProvisoire || ''}"></td>
-                    <td>
-                        <select class="statut-cp-select">
-                            <option value="">Sélectionner</option>
-                            <option value="libérée" ${data.statutCP === 'libérée' ? 'selected' : ''}>libérée</option>
-                            <option value="non libérée" ${data.statutCP === 'non libérée' ? 'selected' : ''}>non libérée</option>
-                        </select>
-                    </td>
-                    <td><input type="date" class="date-main-levee-cp" value="${data.dateMainLeveeCP || ''}"></td>
-                    <td><input type="text" class="caution-definitive-input" value="${data.cautionDefinitive || ''}"></td>
-                    <td>
-                        <select class="statut-cd-select">
-                            <option value="">Sélectionner</option>
-                            <option value="libérée" ${data.statutCD === 'libérée' ? 'selected' : ''}>libérée</option>
-                            <option value="non libérée" ${data.statutCD === 'non libérée' ? 'selected' : ''}>non libérée</option>
-                        </select>
-                    </td>
-                    <td><input type="date" class="date-main-levee-cd" value="${data.dateMainLeveeCD || ''}"></td>
-                    <td><input type="text" class="observation-input" value="${data.observation || ''}"></td>
-                    <td class="actions">
-                        <button class="btn-edit">Modifier</button>
-                        <button class="btn-delete">Supprimer</button>
-                    </td>
-                `;
-                
-                tableBody.appendChild(newRow);
-                setupRowEvents(newRow);
-            }
-            
             function formatDateForInput(dateValue) {
                 if (!dateValue) return '';
                 
-                // Si c'est déjà une date au format YYYY-MM-DD
                 if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
                     return dateValue;
                 }
                 
-                // Si c'est un objet Date
                 if (dateValue instanceof Date) {
                     return dateValue.toISOString().split('T')[0];
                 }
                 
-                // Si c'est un numéro Excel (nombre de jours depuis 1900-01-01)
                 if (typeof dateValue === 'number') {
                     const excelEpoch = new Date(1900, 0, 1);
                     const date = new Date(excelEpoch.getTime() + (dateValue - 1) * 24 * 60 * 60 * 1000);
@@ -1050,7 +1264,6 @@
                 }
                 
                 if (typeof montantValue === 'string') {
-                    // Essayer de convertir en nombre
                     const num = parseFloat(montantValue.replace(/,/g, '.').replace(/\s/g, ''));
                     if (!isNaN(num)) {
                         return num.toLocaleString('fr-FR');
@@ -1069,39 +1282,33 @@
                     const daoA = a.querySelector('.dao-input').value;
                     const daoB = b.querySelector('.dao-input').value;
                     
-                    // Trier d'abord par exercice (croissant)
                     if (exerciceA !== exerciceB) {
                         return exerciceA.localeCompare(exerciceB);
                     }
                     
-                    // Ensuite par N° DAO (croissant)
                     return daoA.localeCompare(daoB);
                 });
                 
-                // Réorganiser les lignes dans le DOM
                 rows.forEach(row => tableBody.appendChild(row));
             }
             
             function exportToExcel() {
                 updateAllData();
                 
-                // Créer un nouveau classeur
                 const wb = XLSX.utils.book_new();
-                
-                // Convertir les données en feuille de calcul
                 const ws = XLSX.utils.json_to_sheet(allData);
                 
-                // Ajouter la feuille au classeur
                 XLSX.utils.book_append_sheet(wb, ws, "Marchés");
-                
-                // Exporter le fichier
                 XLSX.writeFile(wb, "situation_marches.xlsx");
             }
             
             function exportToPdf() {
-                // Pour une implémentation réelle, vous pourriez utiliser une bibliothèque comme jsPDF
-                // Pour cette démonstration, nous allons simplement afficher un message
                 alert('Fonctionnalité d\'exportation PDF à implémenter avec une bibliothèque comme jsPDF');
+            }
+            
+            function showError(message) {
+                errorMessage.textContent = message;
+                errorModal.style.display = 'flex';
             }
         });
     </script>

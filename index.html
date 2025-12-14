@@ -3,1449 +3,459 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Situation des Marchés</title>
+    <title>SITUATION GLOBALE DES MARCHÉS 2025</title>
     
-    <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        :root {
+            --primary: #1e3a8a;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --bg: #f1f5f9;
         }
 
-        body {
-            background-color: #f5f5f5;
-            color: #333;
-            line-height: 1.6;
-            padding: 20px;
-            overflow-x: hidden;
+        * { box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; }
+        body { background-color: var(--bg); margin: 0; padding: 15px; }
+
+        .main-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            height: 96vh;
         }
 
-        .container {
-            max-width: 100%;
-            margin: 0 auto;
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-        }
-
-        header {
-            background-color: #2c3e50;
-            color: white;
-            padding: 20px;
-            text-align: center;
-        }
-
-        h1 {
-            font-size: 24px;
-            margin-bottom: 5px;
-        }
-
-        .subtitle {
-            font-size: 14px;
-            opacity: 0.8;
-        }
-
-        .connection-status {
-            display: inline-block;
-            margin-left: 10px;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-
-        .connected {
-            background-color: #27ae60;
-            color: white;
-        }
-
-        .disconnected {
-            background-color: #e74c3c;
-            color: white;
-        }
-
-        .controls {
+        /* Barre d'outils supérieure */
+        .toolbar {
             padding: 15px 20px;
-            background-color: #ecf0f1;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid #bdc3c7;
+            border-bottom: 2px solid #e2e8f0;
+            gap: 15px;
         }
 
+        .btn-group { display: flex; gap: 8px; }
+        
         .btn {
-            background-color: #3498db;
-            color: white;
+            padding: 9px 16px;
             border: none;
-            padding: 8px 15px;
-            border-radius: 4px;
+            border-radius: 6px;
             cursor: pointer;
-            font-size: 14px;
-            transition: background-color 0.3s;
-        }
-
-        .btn:hover {
-            background-color: #2980b9;
-        }
-
-        .btn-add {
-            background-color: #27ae60;
-        }
-
-        .btn-add:hover {
-            background-color: #219653;
-        }
-
-        .btn-export-excel {
-            background-color: #27ae60;
-        }
-
-        .btn-export-excel:hover {
-            background-color: #219653;
-        }
-
-        .btn-export-pdf {
-            background-color: #e74c3c;
-        }
-
-        .btn-export-pdf:hover {
-            background-color: #c0392b;
-        }
-
-        .btn-import {
-            background-color: #e67e22;
-        }
-
-        .btn-import:hover {
-            background-color: #d35400;
-        }
-
-        .btn-save {
-            background-color: #9b59b6;
-        }
-
-        .btn-save:hover {
-            background-color: #8e44ad;
-        }
-
-        .btn-validate {
-            background-color: #2ecc71;
+            font-weight: 600;
+            font-size: 13px;
             color: white;
-            border: none;
-            padding: 4px 8px;
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 12px;
-        }
-
-        .btn-validate:hover {
-            background-color: #27ae60;
-        }
-
-        .search-box {
             display: flex;
             align-items: center;
+            gap: 6px;
+            transition: 0.2s;
         }
+        .btn-add { background: var(--primary); }
+        .btn-import { background: var(--warning); }
+        .btn-excel { background: #166534; }
+        .btn-pdf { background: #991b1b; }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
 
-        .search-box input {
-            padding: 8px;
-            border: 1px solid #bdc3c7;
-            border-radius: 4px;
-            margin-right: 10px;
-            width: 250px;
-        }
-
-        .pagination-controls {
+        /* Ligne de recherche et pagination fusionnée */
+        .search-nav-bar {
+            display: flex;
+            align-items: center;
+            gap: 15px;
             padding: 10px 20px;
-            background-color: #f8f9fa;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid #dee2e6;
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
         }
 
-        .pagination-info {
-            font-size: 14px;
-        }
-
-        .pagination-buttons {
+        .search-group {
             display: flex;
             align-items: center;
             gap: 10px;
+            flex-grow: 1;
         }
 
-        .page-btn {
-            background-color: #6c757d;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 12px;
+        .search-group input {
+            flex-grow: 1;
+            padding: 8px 15px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 13px;
+            max-width: 600px;
         }
 
-        .page-btn:hover {
-            background-color: #5a6268;
-        }
-
-        .page-btn:disabled {
-            background-color: #c8cbcf;
-            cursor: not-allowed;
-        }
-
-        .rows-per-page {
+        .pagination-group {
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 8px;
+            font-size: 13px;
+            color: #64748b;
+        }
+
+        .pagination-group select {
+            padding: 5px;
+            border-radius: 6px;
+            border: 1px solid #cbd5e1;
+        }
+
+        .status-sync {
             font-size: 12px;
+            color: var(--success);
+            font-weight: 500;
         }
 
-        .rows-per-page select {
-            padding: 4px;
-            border: 1px solid #ced4da;
-            border-radius: 3px;
-        }
-
-        .table-container {
-            overflow-x: auto;
-            max-height: calc(100vh - 300px);
-            position: relative;
-        }
-
-        .horizontal-scrollbar {
-            height: 15px;
-            background: #f0f0f0;
-            border-radius: 0 0 8px 8px;
-            position: relative;
-            margin-top: 5px;
-        }
-
-        .scroll-thumb {
-            height: 100%;
-            background: #3498db;
-            border-radius: 8px;
-            position: absolute;
-            cursor: grab;
-            min-width: 30px;
-        }
-
-        .scroll-thumb:active {
-            cursor: grabbing;
-        }
-
-        table {
+        /* Double Barre de défilement supérieure */
+        .top-scroll-wrapper {
             width: 100%;
-            border-collapse: collapse;
-            min-width: 1200px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            height: 14px;
+            background: #e2e8f0;
         }
+        .top-scroll-content { height: 1px; }
 
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px 10px;
-            text-align: center;
-            font-size: 12px;
-            min-width: 100px;
-        }
-
+        /* Tableau */
+        .table-area { overflow: auto; flex-grow: 1; }
+        table { border-collapse: collapse; width: max-content; font-size: 12px; }
+        
         th {
-            background-color: #34495e;
+            background: #1e293b;
             color: white;
+            padding: 12px 10px;
             position: sticky;
             top: 0;
             z-index: 10;
+            border: 1px solid #334155;
+            text-transform: uppercase;
         }
 
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
+        td { padding: 6px; border: 1px solid #e2e8f0; background: white; }
 
-        tr:hover {
-            background-color: #f1f1f1;
-        }
+        /* Colonnes */
+        .col-id { min-width: 200px; } 
+        .col-objet { min-width: 450px; }
+        .col-date { min-width: 150px; }
+        .col-action { min-width: 100px; text-align: center; } 
 
-        input, select, textarea {
-            width: 100%;
+        input, select, textarea { 
+            width: 100%; 
+            border: 1px solid #d1d5db; 
+            border-radius: 4px; 
             padding: 5px;
-            border: 1px solid #ddd;
-            border-radius: 3px;
-            font-size: 12px;
+            background: transparent;
         }
+        input:focus, textarea:focus { background: #fff; border-color: var(--primary); outline: none; }
+        input:disabled { background: #f1f5f9; cursor: not-allowed; }
 
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: #3498db;
-            box-shadow: 0 0 3px rgba(52, 152, 219, 0.5);
-        }
-
-        .amount-input {
-            text-align: right;
-        }
-
-        .objet-cell {
-            width: 400px;
-            min-width: 400px;
-            max-width: 400px;
-            word-wrap: break-word;
-            white-space: normal;
-        }
-
-        .objet-input {
-            width: 100%;
-            height: 80px;
-            resize: vertical;
-        }
-
-        .actions {
-            display: flex;
-            gap: 5px;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-
-        .btn-edit, .btn-delete {
-            padding: 4px 8px;
-            font-size: 12px;
-            border: none;
-            border-radius: 3px;
-            cursor: pointer;
-        }
-
-        .btn-edit {
-            background-color: #f39c12;
-            color: white;
-        }
-
-        .btn-edit:hover {
-            background-color: #e67e22;
-        }
-
-        .btn-delete {
-            background-color: #e74c3c;
-            color: white;
-        }
-
-        .btn-delete:hover {
-            background-color: #c0392b;
-        }
-
-        .hidden {
-            display: none;
-        }
-
-        .table-footer {
-            padding: 15px 20px;
-            background-color: #ecf0f1;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-top: 1px solid #bdc3c7;
-        }
-
-        .export-options {
-            display: flex;
-            gap: 10px;
-        }
-
-        @media (max-width: 768px) {
-            .controls, .table-footer {
-                flex-direction: column;
-                gap: 10px;
-            }
-            
-            .search-box, .export-options {
-                width: 100%;
-            }
-            
-            .search-box input {
-                width: 100%;
-            }
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .modal-content {
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            width: 400px;
-            max-width: 90%;
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #eee;
-        }
-
-        .modal-title {
+        .icon-btn {
             font-size: 18px;
-            font-weight: bold;
-        }
-
-        .close-modal {
-            background: none;
-            border: none;
-            font-size: 20px;
             cursor: pointer;
+            margin: 0 5px;
+            border: none;
+            background: none;
+            transition: 0.2s;
         }
-
-        .modal-body {
-            margin-bottom: 15px;
-        }
-
-        .modal-footer {
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-        }
-
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 10px;
-            color: #3498db;
-            font-weight: bold;
-        }
-
-        .success-message {
-            color: #27ae60;
-            font-weight: bold;
-            text-align: center;
-            padding: 10px;
-        }
-
-        .error-message {
-            color: #e74c3c;
-            font-weight: bold;
-            text-align: center;
-            padding: 10px;
-        }
-
-        .auto-visa {
-            background-color: #e8f5e8;
-        }
+        .icon-save { color: var(--success); }
+        .icon-delete { color: var(--danger); }
+        .icon-btn:hover { transform: scale(1.2); }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1 id="pageTitle">SITUATION DES MARCHÉS</h1>
-            <div class="subtitle" id="exerciceSubtitle">EXERCICE</div>
-            <div class="connection-status" id="connectionStatus">Chargement...</div>
-        </header>
-        
-        <div class="controls">
-            <div class="search-box">
-                <input type="text" id="searchInput" placeholder="Rechercher par N° DAO, N° marché, Société...">
-                <button class="btn" id="searchBtn">Rechercher</button>
-            </div>
-            <button class="btn btn-save" id="saveBtn">💾 Sauvegarder tout</button>
+
+<div class="main-container">
+    <div class="toolbar">
+        <div class="btn-group">
+            <button class="btn btn-add" onclick="addNewRow()">
+                <i class="fas fa-plus"></i> Nouveau Marché
+            </button>
+            <button class="btn btn-import" onclick="document.getElementById('importFile').click()">
+                <i class="fas fa-file-import"></i> Importer
+            </button>
+            <input type="file" id="importFile" hidden accept=".xlsx, .xls" onchange="importExcel(this)">
+            <button class="btn btn-excel" onclick="exportExcel()">
+                <i class="fas fa-file-excel"></i> Excel
+            </button>
+            <button class="btn btn-pdf" onclick="exportPDF()">
+                <i class="fas fa-file-pdf"></i> PDF
+            </button>
         </div>
-        
-        <div class="pagination-controls">
-            <div class="pagination-info" id="paginationInfo">Page 1 sur 1</div>
-            <div class="pagination-buttons">
-                <button class="page-btn" id="firstPageBtn" disabled>«</button>
-                <button class="page-btn" id="prevPageBtn" disabled>‹</button>
-                <span id="pageNumbers"></span>
-                <button class="page-btn" id="nextPageBtn" disabled>›</button>
-                <button class="page-btn" id="lastPageBtn" disabled>»</button>
-            </div>
-            <div class="rows-per-page">
-                <span>Afficher</span>
-                <select id="rowsPerPageSelect">
-                    <option value="10">10</option>
-                    <option value="20">20</option>
-                    <option value="50">50</option>
-                    <option value="100">100</option>
-                    <option value="500">500</option>
+        <div class="status-sync" id="saveStatus">
+            <i class="fas fa-check-circle"></i> Connecté à Firebase
+        </div>
+    </div>
+
+    <div class="search-nav-bar">
+        <div class="pagination-group">
+            <span>Afficher</span>
+            <select id="pageSize" onchange="changeLimit()">
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="500">500</option>
+            </select>
+            <span>lignes</span>
+        </div>
+
+        <div class="search-group">
+            <i class="fas fa-search" style="color: #94a3b8; margin-right: -35px; z-index: 1;"></i>
+            <input type="text" id="globalSearch" placeholder="Rechercher par société, type (MDD/Invest), visa (Requis/Non), objet..." onkeyup="smartSearch()" style="padding-left: 40px;">
+        </div>
+    </div>
+
+    <div class="top-scroll-wrapper" id="topScroll">
+        <div class="top-scroll-content" id="topScrollContent"></div>
+    </div>
+
+    <div class="table-area" id="tableWrapper">
+        <table id="mainTable">
+            <thead>
+                <tr>
+                    <th>EXERCICE</th>
+                    <th class="col-id">N° DAO</th>
+                    <th class="col-id">N° de marché</th>
+                    <th class="col-objet">Objet</th>
+                    <th>ESTIMATION (DH)</th>
+                    <th class="col-date">Réc. besoins</th>
+                    <th class="col-date">Envoi DAO</th>
+                    <th class="col-date">Ouv. plis</th>
+                    <th class="col-date">Fin travaux</th>
+                    <th>STATUT</th>
+                    <th>SOCIETE</th>
+                    <th>TYPE</th>
+                    <th>Montant retenu</th>
+                    <th>Délai</th>
+                    <th>VISA REQUIS</th>
+                    <th class="col-id">N° DE VISA</th>
+                    <th class="col-date">DATE VISA</th>
+                    <th class="col-date">APPROBATION</th>
+                    <th class="col-date">NOTIF. APPROB.</th>
+                    <th class="col-date">COMMENCEMENT</th>
+                    <th class="col-date">ARRET</th>
+                    <th class="col-date">REPRISE</th>
+                    <th class="col-objet">OBSERVATION</th>
+                    <th class="col-action">ACTION</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // CONFIGURATION FIREBASE
+    const firebaseConfig = {
+        apiKey: "AIzaSyCH3-BrjT_M8hNXwTW0sxBKY6E8t0UDxy4",
+        authDomain: "gestion-marches-publics.firebaseapp.com",
+        projectId: "gestion-marches-publics",
+        storageBucket: "gestion-marches-publics.firebasestorage.app",
+        messagingSenderId: "308165477195",
+        appId: "1:308165477195:web:64d1f1c4d0e17158459ece"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // Synchro Scrolls
+    const tableWrapper = document.getElementById('tableWrapper');
+    const topScroll = document.getElementById('topScroll');
+    const topScrollContent = document.getElementById('topScrollContent');
+    tableWrapper.onscroll = () => topScroll.scrollLeft = tableWrapper.scrollLeft;
+    topScroll.onscroll = () => tableWrapper.scrollLeft = topScroll.scrollLeft;
+
+    function refreshScroll() {
+        topScrollContent.style.width = document.getElementById('mainTable').scrollWidth + "px";
+    }
+
+    let currentLimit = 20;
+
+    function addNewRow(data = {}, id = null) {
+        const tbody = document.getElementById('tableBody');
+        const tr = document.createElement('tr');
+        if(id) tr.dataset.id = id;
+
+        const vDisabled = data.vReq === "visa non requi" || !data.vReq;
+
+        tr.innerHTML = `
+            <td><input type="number" class="f-exercice" value="${data.exercice || 2025}" onchange="autoSave(this)"></td>
+            <td><input type="text" class="f-dao" value="${data.dao || ''}" onchange="autoSave(this)"></td>
+            <td><input type="text" class="f-marche" value="${data.marche || ''}" onchange="autoSave(this)"></td>
+            <td><textarea class="f-objet" rows="2" onchange="autoSave(this)">${data.objet || ''}</textarea></td>
+            <td><input type="number" class="f-est" value="${data.est || ''}" onchange="autoSave(this)"></td>
+            <td><input type="date" class="f-dB" value="${data.dB || ''}" onchange="autoSave(this)"></td>
+            <td><input type="date" class="f-dE" value="${data.dE || ''}" onchange="autoSave(this)"></td>
+            <td><input type="date" class="f-dP" value="${data.dP || ''}" onchange="autoSave(this)"></td>
+            <td><input type="date" class="f-dF" value="${data.dF || ''}" onchange="autoSave(this)"></td>
+            <td>
+                <select class="f-statut" onchange="autoSave(this)">
+                    <option ${data.statut === 'EN COURS' ? 'selected' : ''}>EN COURS</option>
+                    <option ${data.statut === 'MARCHE ATTRIBUE' ? 'selected' : ''}>MARCHE ATTRIBUE</option>
+                    <option ${data.statut === 'INFRUCTUEUX' ? 'selected' : ''}>INFRUCTUEUX</option>
+                    <option ${data.statut === 'ANNULE' ? 'selected' : ''}>ANNULE</option>
                 </select>
-                <span>lignes</span>
-            </div>
-        </div>
-        
-        <div class="table-container" id="tableContainer">
-            <table id="marchesTable">
-                <thead>
-                    <tr>
-                        <th>EXERCICE</th>
-                        <th>N° DAO</th>
-                        <th>N° de marché</th>
-                        <th class="objet-cell">Objet</th>
-                        <th>Date ouverture des plis</th>
-                        <th>Date d'achèvement des travaux</th>
-                        <th>SOCIETE</th>
-                        <th>TYPE DE DEPENSE</th>
-                        <th>Montant Offre retenue</th>
-                        <th>Délai d'exécution</th>
-                        <th>VISA REQUIS</th>
-                        <th>N° DE VISA</th>
-                        <th>DATE VISA</th>
-                        <th>CAUTIONNEMENT PROVISOIRE</th>
-                        <th>Statut CP</th>
-                        <th>Date main levée-CP</th>
-                        <th>OBSERVATION</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="tableBody">
-                    <!-- Les lignes seront ajoutées dynamiquement -->
-                </tbody>
-            </table>
-        </div>
-        
-        <div class="horizontal-scrollbar" id="horizontalScrollbar">
-            <div class="scroll-thumb" id="scrollThumb"></div>
-        </div>
-        
-        <div class="loading" id="loadingMessage">
-            ⏳ Veuillez patienter, opération en cours...
-        </div>
-        
-        <div class="table-footer">
-            <button class="btn btn-add" id="addRowBtn">+ Ajouter une ligne</button>
-            <div class="export-options">
-                <button class="btn btn-import" id="importBtn">📁 Importer</button>
-                <button class="btn btn-export-excel" id="exportExcelBtn">📊 Exporter Excel</button>
-                <button class="btn btn-export-pdf" id="exportPdfBtn">📄 Exporter PDF</button>
-            </div>
-        </div>
-    </div>
+            </td>
+            <td><input type="text" class="f-soc" value="${data.soc || ''}" onchange="autoSave(this)"></td>
+            <td>
+                <select class="f-type" onchange="autoSave(this)">
+                    <option value="MDD" ${data.type === 'MDD' ? 'selected' : ''}>MDD</option>
+                    <option value="invest" ${data.type === 'invest' ? 'selected' : ''}>Investissement</option>
+                </select>
+            </td>
+            <td><input type="number" class="f-mnt" value="${data.mnt || ''}" onchange="autoSave(this)"></td>
+            <td><input type="text" class="f-delai" value="${data.delai || ''}" onchange="autoSave(this)"></td>
+            <td>
+                <select class="f-vReq" onchange="toggleVisa(this); autoSave(this)">
+                    <option value="visa non requi" ${data.vReq === 'visa non requi' ? 'selected' : ''}>visa non requi</option>
+                    <option value="visa requi" ${data.vReq === 'visa requi' ? 'selected' : ''}>visa requi</option>
+                </select>
+            </td>
+            <td><input type="text" class="f-vN" value="${data.vN || ''}" ${vDisabled ? 'disabled' : ''} onchange="autoSave(this)"></td>
+            <td><input type="date" class="f-vD" value="${data.vD || ''}" ${vDisabled ? 'disabled' : ''} onchange="autoSave(this)"></td>
+            <td><input type="date" class="f-dAppr" value="${data.dAppr || ''}" onchange="autoSave(this)"></td>
+            <td><input type="date" class="f-dNot" value="${data.dNot || ''}" onchange="autoSave(this)"></td>
+            <td><input type="date" class="f-dCom" value="${data.dCom || ''}" onchange="autoSave(this)"></td>
+            <td><input type="date" class="f-dArr" value="${data.dArr || ''}" onchange="autoSave(this)"></td>
+            <td><input type="date" class="f-dRep" value="${data.dRep || ''}" onchange="autoSave(this)"></td>
+            <td><textarea class="f-obs" rows="2" onchange="autoSave(this)">${data.obs || ''}</textarea></td>
+            <td class="col-action">
+                <button class="icon-btn icon-save" onclick="saveRow(this)" title="Sauvegarder"><i class="fas fa-save"></i></button>
+                <button class="icon-btn icon-delete" onclick="deleteRow(this)" title="Supprimer"><i class="fas fa-trash-alt"></i></button>
+            </td>
+        `;
+        tbody.prepend(tr);
+        refreshScroll();
+    }
 
-    <!-- Modal pour l'importation -->
-    <div class="modal" id="importModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div class="modal-title">Importer des données</div>
-                <button class="close-modal" id="closeImportModal">&times;</button>
-            </div>
-            <div class="modal-body">
-                <p>Sélectionnez un fichier Excel (.xlsx) à importer :</p>
-                <input type="file" id="fileInput" accept=".xlsx, .xls">
-                <div id="importStatus" style="margin-top: 10px; font-size: 14px;"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn" id="cancelImportBtn">Annuler</button>
-                <button class="btn btn-import" id="confirmImportBtn" disabled>Importer</button>
-            </div>
-        </div>
-    </div>
+    function toggleVisa(el) {
+        const row = el.closest('tr');
+        const disable = el.value === "visa non requi";
+        row.querySelector('.f-vN').disabled = disable;
+        row.querySelector('.f-vD').disabled = disable;
+    }
 
-    <!-- Modal de succès -->
-    <div class="modal" id="successModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div class="modal-title">Opération réussie</div>
-            </div>
-            <div class="modal-body">
-                <div class="success-message" id="successMessage"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-add" id="okSuccessBtn">OK</button>
-            </div>
-        </div>
-    </div>
+    async function loadData() {
+        const snap = await db.collection('marches').orderBy('exercice', 'desc').limit(currentLimit).get();
+        document.getElementById('tableBody').innerHTML = '';
+        snap.forEach(doc => addNewRow(doc.data(), doc.id));
+        refreshScroll();
+    }
 
-    <!-- Modal d'erreur -->
-    <div class="modal" id="errorModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div class="modal-title">Erreur</div>
-            </div>
-            <div class="modal-body">
-                <div class="error-message" id="errorMessage"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn" id="okErrorBtn">OK</button>
-            </div>
-        </div>
-    </div>
+    async function autoSave(el) {
+        document.getElementById('saveStatus').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Synchronisation...';
+        await saveRow(el, true);
+        setTimeout(() => {
+            document.getElementById('saveStatus').innerHTML = '<i class="fas fa-check-circle"></i> Données synchronisées';
+        }, 800);
+    }
 
-    <script>
-        // Configuration Firebase
-        const firebaseConfig = {
-            apiKey: "AIzaSyCH3-BrjT_M8hNXwTW0sxBKY6E8t0UDxy4",
-            authDomain: "gestion-marches-publics.firebaseapp.com",
-            projectId: "gestion-marches-publics",
-            storageBucket: "gestion-marches-publics.firebasestorage.app",
-            messagingSenderId: "308165477195",
-            appId: "1:308165477195:web:64d1f1c4d0e17158459ece",
-            measurementId: "G-92GRNW2QYZ"
+    async function saveRow(el, silent = false) {
+        const row = el.closest('tr');
+        const data = {
+            exercice: row.querySelector('.f-exercice').value,
+            dao: row.querySelector('.f-dao').value,
+            marche: row.querySelector('.f-marche').value,
+            objet: row.querySelector('.f-objet').value,
+            est: row.querySelector('.f-est').value,
+            dB: row.querySelector('.f-dB').value,
+            dE: row.querySelector('.f-dE').value,
+            dP: row.querySelector('.f-dP').value,
+            dF: row.querySelector('.f-dF').value,
+            statut: row.querySelector('.f-statut').value,
+            soc: row.querySelector('.f-soc').value,
+            type: row.querySelector('.f-type').value,
+            mnt: row.querySelector('.f-mnt').value,
+            delai: row.querySelector('.f-delai').value,
+            vReq: row.querySelector('.f-vReq').value,
+            vN: row.querySelector('.f-vN').value,
+            vD: row.querySelector('.f-vD').value,
+            dAppr: row.querySelector('.f-dAppr').value,
+            dNot: row.querySelector('.f-dNot').value,
+            dCom: row.querySelector('.f-dCom').value,
+            dArr: row.querySelector('.f-dArr').value,
+            dRep: row.querySelector('.f-dRep').value,
+            obs: row.querySelector('.f-obs').value
         };
+        
+        if(row.dataset.id) {
+            await db.collection('marches').doc(row.dataset.id).update(data);
+        } else {
+            const res = await db.collection('marches').add(data);
+            row.dataset.id = res.id;
+        }
+        if(!silent) alert("Enregistré !");
+    }
 
-        // Initialiser Firebase
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
+    function deleteRow(btn) {
+        const row = btn.closest('tr');
+        if(confirm("Supprimer ce marché ?")) {
+            if(row.dataset.id) db.collection('marches').doc(row.dataset.id).delete();
+            row.remove();
+        }
+    }
 
-        document.addEventListener('DOMContentLoaded', function() {
-            // Éléments DOM
-            const tableBody = document.getElementById('tableBody');
-            const addRowBtn = document.getElementById('addRowBtn');
-            const saveBtn = document.getElementById('saveBtn');
-            const searchInput = document.getElementById('searchInput');
-            const searchBtn = document.getElementById('searchBtn');
-            const importBtn = document.getElementById('importBtn');
-            const exportExcelBtn = document.getElementById('exportExcelBtn');
-            const exportPdfBtn = document.getElementById('exportPdfBtn');
-            const importModal = document.getElementById('importModal');
-            const successModal = document.getElementById('successModal');
-            const errorModal = document.getElementById('errorModal');
-            const closeImportModal = document.getElementById('closeImportModal');
-            const cancelImportBtn = document.getElementById('cancelImportBtn');
-            const confirmImportBtn = document.getElementById('confirmImportBtn');
-            const okSuccessBtn = document.getElementById('okSuccessBtn');
-            const okErrorBtn = document.getElementById('okErrorBtn');
-            const fileInput = document.getElementById('fileInput');
-            const importStatus = document.getElementById('importStatus');
-            const successMessage = document.getElementById('successMessage');
-            const errorMessage = document.getElementById('errorMessage');
-            const loadingMessage = document.getElementById('loadingMessage');
-            const pageTitle = document.getElementById('pageTitle');
-            const exerciceSubtitle = document.getElementById('exerciceSubtitle');
-            const connectionStatus = document.getElementById('connectionStatus');
-            const tableContainer = document.getElementById('tableContainer');
-            const horizontalScrollbar = document.getElementById('horizontalScrollbar');
-            const scrollThumb = document.getElementById('scrollThumb');
+    // RECHERCHE INTELLIGENTE UNIFIÉE
+    function smartSearch() {
+        const query = document.getElementById('globalSearch').value.toLowerCase();
+        const rows = document.querySelectorAll('#tableBody tr');
+        
+        rows.forEach(row => {
+            // On récupère toutes les valeurs de la ligne pour une recherche globale
+            const exercice = row.querySelector('.f-exercice').value;
+            const dao = row.querySelector('.f-dao').value.toLowerCase();
+            const marche = row.querySelector('.f-marche').value.toLowerCase();
+            const objet = row.querySelector('.f-objet').value.toLowerCase();
+            const societe = row.querySelector('.f-soc').value.toLowerCase();
+            const type = row.querySelector('.f-type').value.toLowerCase();
+            const visa = row.querySelector('.f-vReq').value.toLowerCase();
             
-            // Contrôles de pagination
-            const firstPageBtn = document.getElementById('firstPageBtn');
-            const prevPageBtn = document.getElementById('prevPageBtn');
-            const nextPageBtn = document.getElementById('nextPageBtn');
-            const lastPageBtn = document.getElementById('lastPageBtn');
-            const pageNumbers = document.getElementById('pageNumbers');
-            const paginationInfo = document.getElementById('paginationInfo');
-            const rowsPerPageSelect = document.getElementById('rowsPerPageSelect');
+            // Si la requête est trouvée dans n'importe quel champ important
+            const match = exercice.includes(query) || 
+                          dao.includes(query) || 
+                          marche.includes(query) || 
+                          objet.includes(query) || 
+                          societe.includes(query) || 
+                          type.includes(query) || 
+                          visa.includes(query);
             
-            // Variables globales
-            let currentPage = 1;
-            let rowsPerPage = 10;
-            let allData = [];
-            let filteredData = [];
-            let exercices = new Set();
-            let isConnected = false;
-            
-            // Initialiser l'application
-            initializeApp();
-            
-            // Événements
-            addRowBtn.addEventListener('click', addNewRow);
-            
-            saveBtn.addEventListener('click', saveAllToFirebase);
-            
-            searchBtn.addEventListener('click', performSearch);
-            
-            searchInput.addEventListener('input', performSearch);
-            
-            searchInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    performSearch();
-                }
-            });
-            
-            importBtn.addEventListener('click', function() {
-                importModal.style.display = 'flex';
-            });
-            
-            closeImportModal.addEventListener('click', function() {
-                importModal.style.display = 'none';
-            });
-            
-            cancelImportBtn.addEventListener('click', function() {
-                importModal.style.display = 'none';
-            });
-            
-            okSuccessBtn.addEventListener('click', function() {
-                successModal.style.display = 'none';
-            });
-            
-            okErrorBtn.addEventListener('click', function() {
-                errorModal.style.display = 'none';
-            });
-            
-            fileInput.addEventListener('change', function() {
-                if (fileInput.files.length > 0) {
-                    confirmImportBtn.disabled = false;
-                    importStatus.textContent = `Fichier sélectionné: ${fileInput.files[0].name}`;
-                } else {
-                    confirmImportBtn.disabled = true;
-                    importStatus.textContent = '';
-                }
-            });
-            
-            confirmImportBtn.addEventListener('click', function() {
-                importFromExcel(fileInput.files[0]);
-            });
-            
-            exportExcelBtn.addEventListener('click', exportToExcel);
-            
-            exportPdfBtn.addEventListener('click', exportToPdf);
-            
-            // Événements de pagination
-            firstPageBtn.addEventListener('click', function() {
-                currentPage = 1;
-                updatePagination();
-            });
-            
-            prevPageBtn.addEventListener('click', function() {
-                if (currentPage > 1) {
-                    currentPage--;
-                    updatePagination();
-                }
-            });
-            
-            nextPageBtn.addEventListener('click', function() {
-                const totalPages = Math.ceil(filteredData.length / rowsPerPage);
-                if (currentPage < totalPages) {
-                    currentPage++;
-                    updatePagination();
-                }
-            });
-            
-            lastPageBtn.addEventListener('click', function() {
-                const totalPages = Math.ceil(filteredData.length / rowsPerPage);
-                currentPage = totalPages;
-                updatePagination();
-            });
-            
-            rowsPerPageSelect.addEventListener('change', function() {
-                rowsPerPage = parseInt(this.value);
-                currentPage = 1;
-                updatePagination();
-            });
-            
-            // Configuration de la barre de défilement horizontale
-            function setupHorizontalScrollbar() {
-                const table = document.getElementById('marchesTable');
-                const container = tableContainer;
-                
-                function updateScrollbar() {
-                    const scrollWidth = container.scrollWidth;
-                    const clientWidth = container.clientWidth;
-                    const scrollLeft = container.scrollLeft;
-                    
-                    if (scrollWidth > clientWidth) {
-                        const thumbWidth = (clientWidth / scrollWidth) * 100;
-                        const thumbPosition = (scrollLeft / (scrollWidth - clientWidth)) * (100 - thumbWidth);
-                        
-                        scrollThumb.style.width = `${thumbWidth}%`;
-                        scrollThumb.style.left = `${thumbPosition}%`;
-                        horizontalScrollbar.style.display = 'block';
-                    } else {
-                        horizontalScrollbar.style.display = 'none';
-                    }
-                }
-                
-                // Faire glisser la barre de défilement
-                let isDragging = false;
-                let startX;
-                let startScrollLeft;
-                
-                scrollThumb.addEventListener('mousedown', function(e) {
-                    isDragging = true;
-                    startX = e.clientX;
-                    startScrollLeft = container.scrollLeft;
-                    scrollThumb.style.cursor = 'grabbing';
-                    e.preventDefault();
-                });
-                
-                document.addEventListener('mousemove', function(e) {
-                    if (!isDragging) return;
-                    
-                    const deltaX = e.clientX - startX;
-                    const scrollWidth = container.scrollWidth - container.clientWidth;
-                    const thumbWidth = horizontalScrollbar.offsetWidth;
-                    const thumbMoveRatio = scrollWidth / (thumbWidth - scrollThumb.offsetWidth);
-                    
-                    container.scrollLeft = startScrollLeft + deltaX * thumbMoveRatio;
-                    updateScrollbar();
-                });
-                
-                document.addEventListener('mouseup', function() {
-                    isDragging = false;
-                    scrollThumb.style.cursor = 'grab';
-                });
-                
-                container.addEventListener('scroll', updateScrollbar);
-                window.addEventListener('resize', updateScrollbar);
-                
-                // Mettre à jour initialement
-                updateScrollbar();
-            }
-            
-            function initializeApp() {
-                // Créer une première ligne vierge immédiatement
-                addNewRow();
-                
-                // Initialiser Firebase
-                initializeFirebase();
-                
-                // Configurer la barre de défilement
-                setupHorizontalScrollbar();
-            }
-            
-            function initializeFirebase() {
-                // Vérifier la connexion
-                db.enableNetwork()
-                .then(() => {
-                    isConnected = true;
-                    connectionStatus.textContent = 'Connecté';
-                    connectionStatus.className = 'connection-status connected';
-                    loadFromFirebase();
-                })
-                .catch((error) => {
-                    console.error('Erreur de connexion Firebase:', error);
-                    isConnected = false;
-                    connectionStatus.textContent = 'Hors ligne';
-                    connectionStatus.className = 'connection-status disconnected';
-                    showError('Mode hors ligne activé. Les données seront synchronisées lors de la reconnexion.');
-                });
-            }
-            
-            function loadFromFirebase() {
-                loadingMessage.style.display = 'block';
-                loadingMessage.textContent = '⏳ Chargement des données...';
-                
-                db.collection('marches').orderBy('createdAt', 'desc').get()
-                .then((querySnapshot) => {
-                    // Ne pas vider le tableau s'il y a déjà une ligne vierge
-                    if (querySnapshot.size > 0) {
-                        tableBody.innerHTML = '';
-                        allData = [];
-                        
-                        querySnapshot.forEach((doc) => {
-                            const data = doc.data();
-                            addRowFromFirebaseData(data);
-                        });
-                    }
-                    
-                    loadingMessage.style.display = 'none';
-                    updateExercices();
-                    updatePagination();
-                })
-                .catch((error) => {
-                    loadingMessage.style.display = 'none';
-                    console.error('Erreur lors du chargement:', error);
-                    showError('Erreur lors du chargement des données: ' + error.message);
-                });
-            }
-            
-            function saveAllToFirebase() {
-                if (!isConnected) {
-                    showError('Impossible de sauvegarder: connexion perdue');
-                    return;
-                }
-                
-                loadingMessage.style.display = 'block';
-                loadingMessage.textContent = '⏳ Sauvegarde en cours...';
-                
-                updateAllData();
-                
-                const batch = db.batch();
-                const marchesCollection = db.collection('marches');
-                
-                // Supprimer tous les documents existants
-                db.collection('marches').get()
-                .then((querySnapshot) => {
-                    querySnapshot.forEach((doc) => {
-                        batch.delete(doc.ref);
-                    });
-                    
-                    // Ajouter tous les documents actuels
-                    allData.forEach((rowData, index) => {
-                        // Ignorer les lignes complètement vides
-                        const hasData = Object.values(rowData).some(value => value !== '');
-                        if (hasData) {
-                            const docRef = marchesCollection.doc();
-                            const dataWithTimestamp = {
-                                ...rowData,
-                                id: docRef.id,
-                                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                            };
-                            batch.set(docRef, dataWithTimestamp);
-                        }
-                    });
-                    
-                    return batch.commit();
-                })
-                .then(() => {
-                    loadingMessage.style.display = 'none';
-                    successMessage.textContent = 'Toutes les données sauvegardées avec succès!';
-                    successModal.style.display = 'flex';
-                })
-                .catch((error) => {
-                    loadingMessage.style.display = 'none';
-                    console.error('Erreur lors de la sauvegarde:', error);
-                    showError('Erreur lors de la sauvegarde: ' + error.message);
-                });
-            }
-            
-            function saveRowToFirebase(row) {
-                if (!isConnected) {
-                    showError('Impossible de sauvegarder: connexion perdue');
-                    return;
-                }
-                
-                updateAllData();
-                const rowIndex = Array.from(tableBody.querySelectorAll('tr')).indexOf(row);
-                
-                if (rowIndex >= 0 && rowIndex < allData.length) {
-                    const rowData = allData[rowIndex];
-                    
-                    // Ignorer les lignes complètement vides
-                    const hasData = Object.values(rowData).some(value => value !== '');
-                    if (!hasData) {
-                        showError('Impossible de sauvegarder une ligne vide');
-                        return;
-                    }
-                    
-                    loadingMessage.style.display = 'block';
-                    loadingMessage.textContent = '⏳ Sauvegarde en cours...';
-                    
-                    const docRef = db.collection('marches').doc();
-                    const dataWithTimestamp = {
-                        ...rowData,
-                        id: docRef.id,
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    };
-                    
-                    docRef.set(dataWithTimestamp)
-                    .then(() => {
-                        loadingMessage.style.display = 'none';
-                        successMessage.textContent = 'Ligne sauvegardée avec succès!';
-                        successModal.style.display = 'flex';
-                    })
-                    .catch((error) => {
-                        loadingMessage.style.display = 'none';
-                        console.error('Erreur lors de la sauvegarde:', error);
-                        showError('Erreur lors de la sauvegarde: ' + error.message);
-                    });
-                }
-            }
-            
-            function addRowFromFirebaseData(data) {
-                const newRow = document.createElement('tr');
-                newRow.setAttribute('data-id', data.id || '');
-                
-                newRow.innerHTML = `
-                    <td><input type="text" class="exercice-input" value="${data.EXERCICE || ''}"></td>
-                    <td><input type="text" class="dao-input" value="${data['N° DAO'] || ''}"></td>
-                    <td><input type="text" class="marche-input" value="${data['N° de marché'] || ''}"></td>
-                    <td class="objet-cell"><textarea class="objet-input">${data.Objet || ''}</textarea></td>
-                    <td><input type="date" class="date-ouverture-input" value="${data['Date ouverture des plis'] || ''}"></td>
-                    <td><input type="date" class="date-achevement-input" value="${data["Date d'achèvement des travaux"] || ''}"></td>
-                    <td><input type="text" class="societe-input" value="${data.SOCIETE || ''}"></td>
-                    <td>
-                        <select class="type-depense-select">
-                            <option value="">Sélectionner</option>
-                            <option value="MDD" ${data['TYPE DE DEPENSE'] === 'MDD' ? 'selected' : ''}>MDD</option>
-                            <option value="INVESTISSEMENT" ${data['TYPE DE DEPENSE'] === 'INVESTISSEMENT' ? 'selected' : ''}>INVESTISSEMENT</option>
-                        </select>
-                    </td>
-                    <td><input type="text" class="montant-input amount-input" value="${data['Montant Offre retenue'] || ''}"></td>
-                    <td><input type="text" class="delai-input" value="${data["Délai d'exécution"] || ''}"></td>
-                    <td>
-                        <select class="visa-required">
-                            <option value="">Sélectionner</option>
-                            <option value="visa requis" ${data['VISA REQUIS'] === 'visa requis' ? 'selected' : ''}>visa requis</option>
-                            <option value="visa non requis" ${data['VISA REQUIS'] === 'visa non requis' ? 'selected' : ''}>visa non requis</option>
-                        </select>
-                    </td>
-                    <td><input type="text" class="visa-number" value="${data['N° DE VISA'] || ''}"></td>
-                    <td><input type="date" class="visa-date" value="${data['DATE VISA'] || ''}"></td>
-                    <td><input type="text" class="caution-provisoire-input" value="${data['CAUTIONNEMENT PROVISOIRE'] || ''}"></td>
-                    <td>
-                        <select class="statut-cp-select">
-                            <option value="">Sélectionner</option>
-                            <option value="libérée" ${data['Statut CP'] === 'libérée' ? 'selected' : ''}>libérée</option>
-                            <option value="non libérée" ${data['Statut CP'] === 'non libérée' ? 'selected' : ''}>non libérée</option>
-                        </select>
-                    </td>
-                    <td><input type="date" class="date-main-levee-cp" value="${data['Date main levée-CP'] || ''}"></td>
-                    <td><input type="text" class="observation-input" value="${data.OBSERVATION || ''}"></td>
-                    <td class="actions">
-                        <button class="btn-validate">Valider</button>
-                        <button class="btn-edit">Modifier</button>
-                        <button class="btn-delete">Supprimer</button>
-                    </td>
-                `;
-                
-                tableBody.appendChild(newRow);
-                setupRowEvents(newRow);
-            }
-            
-            function performSearch() {
-                const searchTerm = searchInput.value.toLowerCase().trim();
-                
-                if (searchTerm === '') {
-                    filteredData = [...allData];
-                } else {
-                    filteredData = allData.filter(row => {
-                        return Object.values(row).some(value => 
-                            value && value.toString().toLowerCase().includes(searchTerm)
-                        );
-                    });
-                }
-                
-                currentPage = 1;
-                displayCurrentPage();
-                updatePaginationInfo();
-            }
-            
-            function addNewRow() {
-                const newRow = document.createElement('tr');
-                newRow.setAttribute('data-id', '');
-                
-                newRow.innerHTML = `
-                    <td><input type="text" class="exercice-input" value=""></td>
-                    <td><input type="text" class="dao-input" value=""></td>
-                    <td><input type="text" class="marche-input" value=""></td>
-                    <td class="objet-cell"><textarea class="objet-input"></textarea></td>
-                    <td><input type="date" class="date-ouverture-input" value=""></td>
-                    <td><input type="date" class="date-achevement-input" value=""></td>
-                    <td><input type="text" class="societe-input" value=""></td>
-                    <td>
-                        <select class="type-depense-select">
-                            <option value="">Sélectionner</option>
-                            <option value="MDD">MDD</option>
-                            <option value="INVESTISSEMENT">INVESTISSEMENT</option>
-                        </select>
-                    </td>
-                    <td><input type="text" class="montant-input amount-input" value=""></td>
-                    <td><input type="text" class="delai-input" value=""></td>
-                    <td>
-                        <select class="visa-required">
-                            <option value="">Sélectionner</option>
-                            <option value="visa requis">visa requis</option>
-                            <option value="visa non requis">visa non requis</option>
-                        </select>
-                    </td>
-                    <td><input type="text" class="visa-number" value=""></td>
-                    <td><input type="date" class="visa-date" value=""></td>
-                    <td><input type="text" class="caution-provisoire-input" value=""></td>
-                    <td>
-                        <select class="statut-cp-select">
-                            <option value="">Sélectionner</option>
-                            <option value="libérée">libérée</option>
-                            <option value="non libérée">non libérée</option>
-                        </select>
-                    </td>
-                    <td><input type="date" class="date-main-levee-cp" value=""></td>
-                    <td><input type="text" class="observation-input" value=""></td>
-                    <td class="actions">
-                        <button class="btn-validate">Valider</button>
-                        <button class="btn-edit">Modifier</button>
-                        <button class="btn-delete">Supprimer</button>
-                    </td>
-                `;
-                
-                tableBody.appendChild(newRow);
-                setupRowEvents(newRow);
-                updateAllData();
-                updateExercices();
-                updatePagination();
-            }
-            
-            function setupRowEvents(row) {
-                const montantInput = row.querySelector('.montant-input');
-                const visaRequiredSelect = row.querySelector('.visa-required');
-                const visaNumberInput = row.querySelector('.visa-number');
-                const visaDateInput = row.querySelector('.visa-date');
-                
-                // Auto-détection du visa requis basé sur le montant
-                montantInput.addEventListener('blur', function() {
-                    formatMontant(this);
-                    const montantValue = parseFloat(this.value.replace(/\s/g, '')) || 0;
-                    
-                    if (montantValue >= 500000) {
-                        visaRequiredSelect.value = 'visa requis';
-                        visaRequiredSelect.classList.add('auto-visa');
-                        visaNumberInput.disabled = false;
-                        visaDateInput.disabled = false;
-                    } else {
-                        visaRequiredSelect.value = 'visa non requis';
-                        visaRequiredSelect.classList.remove('auto-visa');
-                        visaNumberInput.disabled = true;
-                        visaDateInput.disabled = true;
-                        visaNumberInput.value = '';
-                        visaDateInput.value = '';
-                    }
-                    
-                    updateAllData();
-                });
-                
-                // Gestion manuelle du visa
-                visaRequiredSelect.addEventListener('change', function() {
-                    if (this.value === 'visa non requis') {
-                        visaNumberInput.disabled = true;
-                        visaDateInput.disabled = true;
-                        visaNumberInput.value = '';
-                        visaDateInput.value = '';
-                        this.classList.remove('auto-visa');
-                    } else {
-                        visaNumberInput.disabled = false;
-                        visaDateInput.disabled = false;
-                    }
-                    updateAllData();
-                });
-                
-                // Bouton Valider - Sauvegarde MANUELLE
-                const validateBtn = row.querySelector('.btn-validate');
-                validateBtn.addEventListener('click', function() {
-                    const inputs = row.querySelectorAll('input, select, textarea');
-                    let isValid = true;
-                    let message = '';
-                    
-                    // Validation basique
-                    const exercice = row.querySelector('.exercice-input').value;
-                    const dao = row.querySelector('.dao-input').value;
-                    const montant = row.querySelector('.montant-input').value;
-                    
-                    if (!exercice) {
-                        isValid = false;
-                        message += 'Exercice est requis\n';
-                    }
-                    if (!dao) {
-                        isValid = false;
-                        message += 'N° DAO est requis\n';
-                    }
-                    if (!montant) {
-                        isValid = false;
-                        message += 'Montant est requis\n';
-                    }
-                    
-                    if (isValid) {
-                        validateBtn.style.backgroundColor = '#27ae60';
-                        validateBtn.textContent = '✓ Validé';
-                        setTimeout(() => {
-                            validateBtn.style.backgroundColor = '#2ecc71';
-                            validateBtn.textContent = 'Valider';
-                        }, 2000);
-                        
-                        // Sauvegarder MANUELLEMENT la ligne
-                        saveRowToFirebase(row);
-                    } else {
-                        alert('Veuillez corriger les erreurs:\n' + message);
-                    }
-                });
-                
-                const inputs = row.querySelectorAll('input, select, textarea');
-                inputs.forEach(input => {
-                    input.addEventListener('change', function() {
-                        updateAllData();
-                        updateExercices();
-                    });
-                    input.addEventListener('input', function() {
-                        updateAllData();
-                        updateExercices();
-                    });
-                });
-                
-                const editBtn = row.querySelector('.btn-edit');
-                const deleteBtn = row.querySelector('.btn-delete');
-                
-                editBtn.addEventListener('click', function() {
-                    toggleEditMode(row);
-                });
-                
-                deleteBtn.addEventListener('click', function() {
-                    if (confirm('Êtes-vous sûr de vouloir supprimer cette ligne ?')) {
-                        tableBody.removeChild(row);
-                        updateExercices();
-                        updatePagination();
-                    }
-                });
-            }
-            
-            function formatMontant(input) {
-                let value = input.value.replace(/\s/g, '');
-                if (value) {
-                    const numValue = parseInt(value);
-                    if (!isNaN(numValue)) {
-                        value = numValue.toLocaleString('fr-FR');
-                        input.value = value;
-                    }
-                }
-            }
-            
-            function toggleEditMode(row) {
-                const inputs = row.querySelectorAll('input, select, textarea');
-                const editBtn = row.querySelector('.btn-edit');
-                
-                if (editBtn.textContent === 'Modifier') {
-                    inputs.forEach(input => {
-                        if (!input.disabled) {
-                            input.style.backgroundColor = '#fffacd';
-                        }
-                    });
-                    editBtn.textContent = 'Sauvegarder';
-                    editBtn.style.backgroundColor = '#27ae60';
-                } else {
-                    inputs.forEach(input => {
-                        input.style.backgroundColor = '';
-                    });
-                    editBtn.textContent = 'Modifier';
-                    editBtn.style.backgroundColor = '#f39c12';
-                    
-                    updateAllData();
-                    updateExercices();
-                }
-            }
-            
-            function updateAllData() {
-                allData = [];
-                const rows = tableBody.querySelectorAll('tr');
-                
-                rows.forEach(row => {
-                    const inputs = row.querySelectorAll('input, select, textarea');
-                    const rowData = {};
-                    
-                    inputs.forEach((input, index) => {
-                        const header = document.querySelectorAll('th')[index].textContent;
-                        rowData[header] = input.value;
-                    });
-                    
-                    allData.push(rowData);
-                });
-                
-                filteredData = [...allData];
-            }
-            
-            function updateExercices() {
-                exercices.clear();
-                const exerciceInputs = tableBody.querySelectorAll('.exercice-input');
-                
-                exerciceInputs.forEach(input => {
-                    if (input.value) {
-                        exercices.add(input.value);
-                    }
-                });
-                
-                if (exercices.size === 0) {
-                    pageTitle.textContent = 'SITUATION DES MARCHÉS';
-                    exerciceSubtitle.textContent = 'EXERCICE';
-                } else if (exercices.size === 1) {
-                    pageTitle.textContent = 'SITUATION DES MARCHÉS';
-                    exerciceSubtitle.textContent = `EXERCICE ${Array.from(exercices)[0]}`;
-                } else {
-                    pageTitle.textContent = 'SITUATION DES MARCHÉS';
-                    exerciceSubtitle.textContent = `EXERCICES ${Array.from(exercices).sort().join(', ')}`;
-                }
-            }
-            
-            function updatePagination() {
-                updateAllData();
-                updateExercices();
-                updatePaginationInfo();
-                displayCurrentPage();
-            }
-            
-            function updatePaginationInfo() {
-                const totalRows = filteredData.length;
-                const totalPages = Math.ceil(totalRows / rowsPerPage);
-                
-                paginationInfo.textContent = `Page ${currentPage} sur ${totalPages} (${totalRows} lignes)`;
-                
-                firstPageBtn.disabled = currentPage === 1;
-                prevPageBtn.disabled = currentPage === 1;
-                nextPageBtn.disabled = currentPage === totalPages || totalPages === 0;
-                lastPageBtn.disabled = currentPage === totalPages || totalPages === 0;
-                
-                pageNumbers.innerHTML = '';
-                const startPage = Math.max(1, currentPage - 2);
-                const endPage = Math.min(totalPages, currentPage + 2);
-                
-                for (let i = startPage; i <= endPage; i++) {
-                    const pageBtn = document.createElement('button');
-                    pageBtn.className = 'page-btn';
-                    pageBtn.textContent = i;
-                    pageBtn.style.backgroundColor = i === currentPage ? '#3498db' : '#6c757d';
-                    
-                    pageBtn.addEventListener('click', function() {
-                        currentPage = i;
-                        updatePagination();
-                    });
-                    
-                    pageNumbers.appendChild(pageBtn);
-                }
-            }
-            
-            function displayCurrentPage() {
-                const rows = tableBody.querySelectorAll('tr');
-                const startIndex = (currentPage - 1) * rowsPerPage;
-                const endIndex = startIndex + rowsPerPage;
-                
-                rows.forEach((row, index) => {
-                    if (index >= startIndex && index < endIndex && index < filteredData.length) {
-                        row.style.display = '';
-                    } else {
-                        row.style.display = 'none';
-                    }
-                });
-            }
-            
-            function importFromExcel(file) {
-                if (!file) return;
-                
-                loadingMessage.style.display = 'block';
-                loadingMessage.textContent = '⏳ Importation en cours...';
-                importStatus.textContent = 'Traitement en cours...';
-                
-                const reader = new FileReader();
-                
-                reader.onload = function(e) {
-                    try {
-                        const data = new Uint8Array(e.target.result);
-                        const workbook = XLSX.read(data, { type: 'array' });
-                        
-                        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                        
-                        // Vider le tableau avant l'importation
-                        tableBody.innerHTML = '';
-                        allData = [];
-                        
-                        let importedRows = 0;
-                        for (let i = 1; i < jsonData.length; i++) {
-                            const rowData = jsonData[i];
-                            if (rowData && rowData.length > 0) {
-                                const dataObj = {
-                                    EXERCICE: rowData[0] || '',
-                                    'N° DAO': rowData[1] || '',
-                                    'N° de marché': rowData[2] || '',
-                                    'Objet': rowData[3] || '',
-                                    'Date ouverture des plis': formatDateForInput(rowData[4]),
-                                    "Date d'achèvement des travaux": formatDateForInput(rowData[5]),
-                                    'SOCIETE': rowData[6] || '',
-                                    'TYPE DE DEPENSE': rowData[7] || '',
-                                    'Montant Offre retenue': formatMontantForInput(rowData[8]),
-                                    "Délai d'exécution": rowData[9] || '',
-                                    'VISA REQUIS': rowData[10] || '',
-                                    'N° DE VISA': rowData[11] || '',
-                                    'DATE VISA': formatDateForInput(rowData[12]),
-                                    'CAUTIONNEMENT PROVISOIRE': rowData[13] || '',
-                                    'Statut CP': rowData[14] || '',
-                                    'Date main levée-CP': formatDateForInput(rowData[15]),
-                                    'OBSERVATION': rowData[16] || ''
-                                };
-                                
-                                addRowFromFirebaseData(dataObj);
-                                importedRows++;
-                            }
-                        }
-                        
-                        // Ajouter une ligne vierge après l'importation
-                        if (importedRows === 0) {
-                            addNewRow();
-                        }
-                        
-                        loadingMessage.style.display = 'none';
-                        importModal.style.display = 'none';
-                        
-                        successMessage.textContent = `Importation réussie! ${importedRows} lignes importées.`;
-                        successModal.style.display = 'flex';
-                        
-                        updateExercices();
-                        updatePagination();
-                        
-                        // Sauvegarder automatiquement après l'importation
-                        if (isConnected && importedRows > 0) {
-                            saveAllToFirebase();
-                        }
-                        
-                    } catch (error) {
-                        loadingMessage.style.display = 'none';
-                        importStatus.textContent = `Erreur lors de l'importation: ${error.message}`;
-                        console.error(error);
-                    }
-                };
-                
-                reader.onerror = function() {
-                    loadingMessage.style.display = 'none';
-                    importStatus.textContent = 'Erreur lors de la lecture du fichier.';
-                };
-                
-                reader.readAsArrayBuffer(file);
-            }
-            
-            function formatDateForInput(dateValue) {
-                if (!dateValue) return '';
-                
-                if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
-                    return dateValue;
-                }
-                
-                if (dateValue instanceof Date) {
-                    return dateValue.toISOString().split('T')[0];
-                }
-                
-                if (typeof dateValue === 'number') {
-                    const excelEpoch = new Date(1900, 0, 1);
-                    const date = new Date(excelEpoch.getTime() + (dateValue - 1) * 24 * 60 * 60 * 1000);
-                    return date.toISOString().split('T')[0];
-                }
-                
-                return '';
-            }
-            
-            function formatMontantForInput(montantValue) {
-                if (!montantValue) return '';
-                
-                if (typeof montantValue === 'number') {
-                    return montantValue.toLocaleString('fr-FR');
-                }
-                
-                if (typeof montantValue === 'string') {
-                    const num = parseFloat(montantValue.replace(/,/g, '.').replace(/\s/g, ''));
-                    if (!isNaN(num)) {
-                        return num.toLocaleString('fr-FR');
-                    }
-                }
-                
-                return montantValue;
-            }
-            
-            function exportToExcel() {
-                updateAllData();
-                
-                const wb = XLSX.utils.book_new();
-                const ws = XLSX.utils.json_to_sheet(allData);
-                
-                XLSX.utils.book_append_sheet(wb, ws, "Marchés");
-                XLSX.writeFile(wb, "situation_marches.xlsx");
-            }
-            
-            function exportToPdf() {
-                alert('Fonctionnalité d\'exportation PDF à implémenter avec une bibliothèque comme jsPDF');
-            }
-            
-            function showError(message) {
-                errorMessage.textContent = message;
-                errorModal.style.display = 'flex';
-            }
+            row.style.display = match ? "" : "none";
         });
-    </script>
+    }
+
+    function importExcel(input) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const json = XLSX.utils.sheet_to_json(firstSheet);
+            json.forEach(item => addNewRow(item));
+        };
+        reader.readAsArrayBuffer(input.files[0]);
+    }
+
+    function exportExcel() {
+        const wb = XLSX.utils.table_to_book(document.getElementById('mainTable'));
+        XLSX.writeFile(wb, "Situation_Globale_Marches.xlsx");
+    }
+
+    function exportPDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('l', 'mm', [1200, 600]);
+        doc.autoTable({ html: '#mainTable', theme: 'grid' });
+        doc.save("Situation_Globale.pdf");
+    }
+
+    function changeLimit() {
+        currentLimit = parseInt(document.getElementById('pageSize').value);
+        loadData();
+    }
+
+    window.onload = loadData;
+</script>
 </body>
 </html>
